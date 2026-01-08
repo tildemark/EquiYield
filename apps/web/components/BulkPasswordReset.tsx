@@ -1,0 +1,59 @@
+"use client";
+
+import { useState } from 'react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+
+export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any | null>(null);
+  const [error, setError] = useState('');
+  const [sendEmail, setSendEmail] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    setResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/bulk-passwords`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+        body: JSON.stringify({ userIds, sendEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk reset failed');
+      setResult(data);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Bulk Password Reset</h3>
+        <label className="text-sm flex items-center gap-2">
+          <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
+          Email passwords to members
+        </label>
+      </div>
+      <button className="btn btn-primary" onClick={run} disabled={busy || userIds.length === 0}>
+        {busy ? 'Running…' : `Reset for ${userIds.length} member(s)`}
+      </button>
+      {error && <div className="text-red-300 text-sm">{error}</div>}
+      {result && (
+        <div className="text-sm">
+          <div className="text-green-300 font-semibold mb-1">New Passwords</div>
+          <ul className="list-disc pl-5 space-y-1">
+            {result.results?.map((r: any) => (
+              <li key={r.id}>{r.email} — <span className="font-mono">{r.password}</span> {r.emailed ? '(emailed)' : ''}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
