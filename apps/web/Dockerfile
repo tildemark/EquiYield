@@ -16,7 +16,8 @@ COPY apps/web/ ./apps/web/
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+ENV NODE_OPTIONS=--max-old-space-size=4096
+RUN npx next build
 
 EXPOSE 3000
 CMD ["npm", "start"]
