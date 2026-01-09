@@ -1339,12 +1339,12 @@ router.post('/dividends/payouts/bulk', async (req, res) => {
     // Get all eligible members for the year
     const eligibleMembers = await prisma.user.findMany({
       where: {
-        archived_at: null,
+        archivedAt: null,
         share_count: { gt: 0 },
         cycleDividendStatus: {
           some: {
             year,
-            is_eligible: true,
+            isEligible: true,
           },
         },
       },

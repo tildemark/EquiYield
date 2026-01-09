@@ -18,9 +18,9 @@ app.use(helmet({
 }));
 
 // Security: CORS
-const corsOptions = {
+const corsOptions: cors.CorsOptions = {
   origin: process.env.NODE_ENV === 'production'
-    ? ['https://equiyield.sanchez.ph', process.env.ALLOWED_ORIGIN].filter(Boolean)
+    ? (['https://equiyield.sanchez.ph', process.env.ALLOWED_ORIGIN].filter(Boolean) as string[])
     : '*',
   credentials: true,
   optionsSuccessStatus: 200,

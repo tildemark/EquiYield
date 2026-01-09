@@ -29,9 +29,9 @@ function getJwtSecret(): string {
   return secret;
 }
 
-export function signToken(payload: TokenPayload, expiresIn = '30d'): string {
+export function signToken(payload: TokenPayload, expiresIn: string = '30d'): string {
   const secret = getJwtSecret();
-  return jwt.sign(payload, secret, { expiresIn });
+  return jwt.sign(payload, secret, { expiresIn } as jwt.SignOptions);
 }
 
 export function verifyToken(token: string): TokenPayload {
