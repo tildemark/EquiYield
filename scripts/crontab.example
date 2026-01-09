@@ -1,0 +1,8 @@
+# Crontab entry for daily demo reset
+# Add this to your server's crontab with: crontab -e
+
+# Reset demo data daily at midnight
+0 0 * * * /path/to/equiyield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
+
+# Alternative: Reset every 6 hours for high-traffic demos
+# 0 */6 * * * /path/to/equiyield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
