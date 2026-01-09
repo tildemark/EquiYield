@@ -2,14 +2,18 @@ FROM node:18
 
 WORKDIR /app
 
-# Copy everything pre-built
+# Install dependencies
 COPY apps/server/package*.json ./
-COPY apps/server/node_modules ./node_modules
-COPY apps/server/dist ./dist
-COPY apps/server/prisma ./prisma
+RUN npm install 2>&1 | tee /tmp/npm-install.log || (cat /tmp/npm-install.log && exit 1)
 
-# Generate Prisma in case node_modules/.prisma is missing
-RUN npx prisma generate || true
+# Copy source
+COPY apps/server/ ./
+
+# Generate Prisma
+RUN npx prisma generate 2>&1 | tee /tmp/prisma.log || (cat /tmp/prisma.log && exit 1)
+
+# Build TypeScript with verbose output
+RUN npm run build 2>&1 | tee /tmp/build.log || (cat /tmp/build.log && exit 1)
 
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
