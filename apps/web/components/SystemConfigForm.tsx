@@ -17,7 +17,7 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 export default function SystemConfigForm() {
-  const [config, setConfig] = useState<Config | null>(null);
+  const [config, setConfig] = useState<SystemConfig | null>(null);
   const [minShares, setMinShares] = useState('');
   const [maxShares, setMaxShares] = useState('');
   const [shareValue, setShareValue] = useState('');
