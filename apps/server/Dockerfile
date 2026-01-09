@@ -29,7 +29,7 @@ WORKDIR /app/apps/server
 
 # Install production dependencies only
 COPY apps/server/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --production
 
 # Copy built files and Prisma schema
 COPY --from=builder /app/apps/server/dist ./dist

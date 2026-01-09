@@ -26,7 +26,7 @@ WORKDIR /app/apps/web
 
 # Install production dependencies only
 COPY apps/web/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --production
 
 # Copy built files
 COPY --from=builder /app/apps/web/.next ./.next
