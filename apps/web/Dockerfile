@@ -7,16 +7,12 @@ WORKDIR /app/apps/web
 COPY apps/web/package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy source files
 COPY apps/web ./
 
-# Set production environment
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Build Next.js
+# Build Next.js (disable telemetry and set production)
 RUN npm run build
 
 # Production stage
@@ -24,12 +20,12 @@ FROM node:18-alpine AS production
 
 WORKDIR /app/apps/web
 
-# Copy built files and dependencies from builder
+# Copy built files from builder
 COPY --from=builder /app/apps/web/.next ./.next
 COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder /app/apps/web/node_modules ./node_modules
-COPY --from=builder /app/apps/web/next.config.mjs ./
 COPY apps/web/package*.json ./
+COPY apps/web/next.config.mjs ./
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -42,9 +38,6 @@ USER nextjs
 
 # Expose port
 EXPOSE 3000
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \

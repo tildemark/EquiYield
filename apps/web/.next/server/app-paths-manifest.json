@@ -1,7 +1,16 @@
 {
-  "/member/dashboard/page": "app/member/dashboard/page.js",
-  "/admin/loans/page": "app/admin/loans/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/config/page": "app/admin/config/page.js",
+  "/admin/contributions/page": "app/admin/contributions/page.js",
+  "/admin/members/[id]/page": "app/admin/members/[id]/page.js",
   "/admin/loans/create/page": "app/admin/loans/create/page.js",
-  "/member/login/page": "app/member/login/page.js",
-  "/admin/members/page": "app/admin/members/page.js"
+  "/admin/dividends/page": "app/admin/dividends/page.js",
+  "/admin/loans/page": "app/admin/loans/page.js",
+  "/admin/members/page": "app/admin/members/page.js",
+  "/admin/login/page": "app/admin/login/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/admin/payments/page": "app/admin/payments/page.js",
+  "/member/dashboard/page": "app/member/dashboard/page.js",
+  "/member/login/page": "app/member/login/page.js"
 }
