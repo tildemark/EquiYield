@@ -2,18 +2,14 @@ FROM node:18
 
 WORKDIR /app
 
-# Copy root workspace files
-COPY package*.json ./
-COPY apps/server/package*.json ./apps/server/
-
-# Install all workspace dependencies INCLUDING devDependencies (needed for build)
+# Copy server package files and install directly
+COPY apps/server/package*.json ./
 RUN npm install
 
 # Copy server source
-COPY apps/server/ ./apps/server/
+COPY apps/server/ ./
 
-# Generate Prisma and build from workspace
-WORKDIR /app/apps/server
+# Generate Prisma and build
 RUN npx prisma generate
 RUN npx tsc -p tsconfig.json
 

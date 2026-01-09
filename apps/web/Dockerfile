@@ -2,22 +2,18 @@ FROM node:18
 
 WORKDIR /app
 
-# Copy root workspace files
-COPY package*.json ./
-COPY apps/web/package*.json ./apps/web/
-
-# Install all workspace dependencies from root
+# Copy web package files and install directly
+COPY apps/web/package*.json ./
 RUN npm install
 
 # Copy web source
-COPY apps/web/ ./apps/web/
+COPY apps/web/ ./
 
-# Build from workspace
-WORKDIR /app/apps/web
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Build with API URL
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 EXPOSE 3000
