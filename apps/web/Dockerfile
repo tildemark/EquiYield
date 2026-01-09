@@ -1,19 +1,16 @@
 # Multi-stage build for Next.js production
 FROM node:18-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/apps/web
 
 # Copy package files
-COPY package*.json ./
-COPY apps/web/package*.json ./apps/web/
+COPY apps/web/package*.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy source files
-COPY apps/web ./apps/web
-
-WORKDIR /app/apps/web
+COPY apps/web ./
 
 # Set production environment
 ENV NODE_ENV=production
@@ -25,14 +22,11 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS production
 
-WORKDIR /app
+WORKDIR /app/apps/web
 
 # Install production dependencies only
-COPY package*.json ./
-COPY apps/web/package*.json ./apps/web/
-RUN npm ci --only=production
-
-WORKDIR /app/apps/web
+COPY apps/web/package*.json ./
+RUN npm ci --omit=dev
 
 # Copy built files
 COPY --from=builder /app/apps/web/.next ./.next
@@ -45,7 +39,7 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
 # Set ownership
-RUN chown -R nextjs:nodejs /app
+RUN chown -R nextjs:nodejs /app/apps/web
 
 USER nextjs
 
