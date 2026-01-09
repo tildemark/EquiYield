@@ -65,6 +65,37 @@ View logs:
 docker-compose logs -f
 ```
 
+## Production Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete production setup guide.
+
+### Nginx Proxy Manager Configuration
+
+Configure a single proxy host with custom location for the API:
+
+**1. Main Proxy Host:**
+- **Domain:** `equiyield.sanchez.ph` (your domain)
+- **Scheme:** `http`
+- **Forward Hostname:** `equiyield-web`
+- **Forward Port:** `3000`
+- **Cache Assets:** ✓
+- **Block Common Exploits:** ✓
+- **Websockets Support:** ✓
+- **SSL:** Request Let's Encrypt certificate, Force SSL
+
+**2. Custom Location (same proxy host):**
+- Go to **"Custom Locations"** tab
+- **Location:** `/api`
+- **Scheme:** `http`
+- **Forward Hostname:** `equiyield-server`
+- **Forward Port:** `4000`
+
+This routes:
+- `yourdomain.com/` → Frontend (Next.js web)
+- `yourdomain.com/api/*` → Backend (Express API)
+
+**Cloudflare Users:** If using Cloudflare proxy, temporarily set DNS to **DNS Only** (gray cloud) during initial SSL certificate generation, then re-enable proxy after certificate is issued.
+
 ## Admin Header
 
 Sensitive admin APIs require `x-admin-token` header equal to `ADMIN_TOKEN` from `apps/server/.env`.
