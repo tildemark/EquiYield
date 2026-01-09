@@ -1,25 +1,22 @@
 # Multi-stage build for production
 FROM node:18-alpine AS builder
 
-WORKDIR /app
-
-# Copy package files for monorepo
-COPY package*.json ./
-COPY apps/server/package*.json ./apps/server/
-
-# Install root dependencies
-RUN npm ci
-
-# Install server dependencies
 WORKDIR /app/apps/server
+
+# Copy server package files
+COPY apps/server/package*.json ./
+
+# Install dependencies
 RUN npm ci
 
-# Copy all source files
-WORKDIR /app
-COPY apps/server ./apps/server
+# Copy prisma schema
+COPY apps/server/prisma ./prisma
+
+# Copy source files
+COPY apps/server/src ./src
+COPY apps/server/tsconfig.json ./
 
 # Generate Prisma client
-WORKDIR /app/apps/server
 RUN npx prisma generate
 
 # Build TypeScript
@@ -28,22 +25,19 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS production
 
-WORKDIR /app
+WORKDIR /app/apps/server
 
 # Install production dependencies only
-COPY package*.json ./
-COPY apps/server/package*.json ./apps/server/
+COPY apps/server/package*.json ./
 RUN npm ci --only=production
 
 # Copy built files and Prisma schema
-COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/server/prisma ./apps/server/prisma
-COPY --from=builder /app/apps/server/node_modules/.prisma ./apps/server/node_modules/.prisma
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/apps/server/prisma ./prisma
+COPY --from=builder /app/apps/server/node_modules/.prisma ./node_modules/.prisma
 
 # Copy migration files
-COPY --from=builder /app/apps/server/prisma/migrations ./apps/server/prisma/migrations
-
-WORKDIR /app/apps/server
+COPY apps/server/prisma/migrations ./prisma/migrations
 
 # Expose port
 EXPOSE 4000
