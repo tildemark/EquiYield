@@ -1,5 +1,5 @@
 # Multi-stage build for Next.js production
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app/apps/web
 
@@ -7,16 +7,16 @@ WORKDIR /app/apps/web
 COPY apps/web/package*.json ./
 
 # Install dependencies
-RUN npm install --legacy-peer-deps
+RUN npm install
 
 # Copy source files
 COPY apps/web ./
 
-# Build Next.js (disable telemetry and set production)
+# Build Next.js
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:18-slim AS production
 
 WORKDIR /app/apps/web
 
@@ -28,11 +28,10 @@ COPY apps/web/package*.json ./
 COPY apps/web/next.config.mjs ./
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+RUN useradd -m -u 1001 nextjs
 
 # Set ownership
-RUN chown -R nextjs:nodejs /app/apps/web
+RUN chown -R nextjs:nextjs /app/apps/web
 
 USER nextjs
 

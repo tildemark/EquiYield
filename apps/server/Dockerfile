@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app/apps/server
 
@@ -7,7 +7,7 @@ WORKDIR /app/apps/server
 COPY apps/server/package*.json ./
 
 # Install dependencies
-RUN npm install --legacy-peer-deps
+RUN npm install
 
 # Copy prisma schema first
 COPY apps/server/prisma ./prisma
@@ -23,7 +23,7 @@ COPY apps/server/tsconfig.json ./
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:18-slim AS production
 
 WORKDIR /app/apps/server
 
