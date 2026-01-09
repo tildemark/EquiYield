@@ -9,15 +9,15 @@ COPY apps/server/package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy prisma schema
+# Copy prisma schema first
 COPY apps/server/prisma ./prisma
 
-# Copy source files
+# Generate Prisma client BEFORE copying source files
+RUN npx prisma generate
+
+# Now copy source files
 COPY apps/server/src ./src
 COPY apps/server/tsconfig.json ./
-
-# Generate Prisma client
-RUN npx prisma generate
 
 # Build TypeScript
 RUN npm run build
