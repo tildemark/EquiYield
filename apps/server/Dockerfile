@@ -3,14 +3,19 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files for monorepo
 COPY package*.json ./
 COPY apps/server/package*.json ./apps/server/
 
-# Install dependencies
+# Install root dependencies
 RUN npm ci
 
-# Copy source files
+# Install server dependencies
+WORKDIR /app/apps/server
+RUN npm ci
+
+# Copy all source files
+WORKDIR /app
 COPY apps/server ./apps/server
 
 # Generate Prisma client
