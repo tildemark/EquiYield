@@ -1,0 +1,181 @@
+// Prisma schema for EquiYield
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+}
+
+enum ContributionStatus {
+  PARTIAL
+  FULL
+}
+
+enum PaymentMethod {
+  GCASH
+  INSTAPAY
+  BANK_TRANSFER
+  CASH
+}
+
+enum BorrowerType {
+  MEMBER
+  NON_MEMBER
+}
+
+model SystemConfig {
+  id          Int     @id @default(1)
+  min_shares  Int
+  max_shares  Int
+  share_value Int     // In Philippine Peso (PHP)
+    min_loan_amount  Int     @default(1000)
+    max_loan_amount  Int     @default(100000)
+
+  // singleton guard
+  @@map("system_config")
+}
+
+model User {
+  id                   Int      @id @default(autoincrement())
+  full_name            String   @default("")
+  email                String   @unique
+  phone_number         String   @default("")
+  passwordHash         String?
+  forcePasswordReset   Boolean  @default(false)
+  archivedAt           DateTime?
+  gcashNumber          String   @default("")
+  bankName             String   @default("")
+  bankAccountNumber    String   @default("")
+  role                 Role     @default(MEMBER)
+  share_count          Int      @default(0)
+
+  contributions        Contribution[]
+  loans                Loan[]
+  coMakerOnLoans       LoanCoMaker[]
+  cycleDividendStatus  CycleDividendEligibility[]
+  payoutsReceived      DividendPayout[] @relation("PayoutsReceived")
+  payoutsCreated       DividendPayout[] @relation("PayoutsCreated")
+  archiveRuns          ArchiveRun[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Records archive/purge events for auditing
+model ArchiveRun {
+  id                   Int      @id @default(autoincrement())
+  performedByUserId    Int?
+  performedBy          User?    @relation(fields: [performedByUserId], references: [id])
+  year                 Int
+  purgedContributions  Int      @default(0)
+  purgedLoans          Int      @default(0)
+  note                 String   @default("")
+  createdAt            DateTime @default(now())
+}
+
+model Contribution {
+  id               Int                @id @default(autoincrement())
+  user             User               @relation(fields: [userId], references: [id])
+  userId           Int
+  amount           Int                // Stored in PHP cents optional? Using PHP integer pesos for simplicity
+  date_paid        DateTime
+  method           PaymentMethod
+  reference_number String
+  status           ContributionStatus
+
+  createdAt        DateTime           @default(now())
+
+  @@index([userId, date_paid])
+}
+
+model Loan {
+  id                 Int           @id @default(autoincrement())
+  user               User?         @relation(fields: [userId], references: [id])
+  userId             Int?
+  borrowerType       BorrowerType
+  borrowerName       String
+  borrowerEmail      String
+  borrowerPhone      String
+  principal          Int           // PHP
+  monthlyRateBps     Int           // Basis points per month (e.g., 500 = 5%)
+  termMonths         Int           // Number of months until December
+  interest           Int           // PHP (total interest for full term)
+  monthlyAmortization Int          // PHP (monthly payment amount)
+  dueDate            DateTime
+  status             String        @default("PENDING")
+  coMakers           LoanCoMaker[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model LoanCoMaker {
+  id        Int      @id @default(autoincrement())
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+
+  @@unique([loanId, userId])
+}
+
+model ProfitPool {
+  id         Int      @id @default(autoincrement())
+  year       Int
+  amount     Int      // Total profit to distribute for the given year (PHP)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([year])
+}
+
+// Cycle-based dividend eligibility (1 = due 15th, 2 = due 30th/last day)
+model CycleDividendEligibility {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  year        Int
+  cycle       Int      // 1 or 2 (corresponds to 15th or 30th due dates)
+  isEligible  Boolean  @default(true)
+  reason      String?  @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, year, cycle])
+  @@index([year, cycle])
+}
+
+enum DepositChannel {
+  GCASH
+  BANK
+}
+
+// Annual dividend payout record per member
+model DividendPayout {
+  id                 Int             @id @default(autoincrement())
+  user               User            @relation("PayoutsReceived", fields: [userId], references: [id], onDelete: Cascade)
+  userId             Int
+  createdBy          User?           @relation("PayoutsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUserId    Int?
+  year               Int
+  perShare           Float
+  sharesCount        Int
+  amount             Int             // PHP
+  channel            DepositChannel
+  bankName           String          @default("")
+  bankAccountNumber  String          @default("")
+  gcashNumber        String          @default("")
+  reference          String          @default("")
+  depositedAt        DateTime
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([userId, year])
+  @@index([year])
+}
