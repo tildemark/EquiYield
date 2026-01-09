@@ -7,7 +7,7 @@ WORKDIR /app/apps/web
 COPY apps/web/package*.json ./
 
 # Install dependencies
-RUN npm ci --verbose
+RUN npm install
 
 # Copy source files
 COPY apps/web ./
@@ -18,21 +18,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_DEMO_MODE=true
 ENV NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
 
-# Build Next.js with verbose output
-RUN npm run build 2>&1 || (echo "Next.js build failed, see error above" && exit 1)
+# Build Next.js
+RUN npm run build
 
 # Production stage
 FROM node:18-slim AS production
 
 WORKDIR /app/apps/web
 
-# Install only production dependencies
-RUN npm ci --only=production --verbose || true
-
-# Copy built files from builder
+# Copy node_modules and built files from builder
+COPY --from=builder /app/apps/web/node_modules ./node_modules
 COPY --from=builder /app/apps/web/.next ./.next
 COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder /app/apps/web/node_modules ./node_modules
 COPY apps/web/package*.json ./
 COPY apps/web/next.config.mjs ./
 

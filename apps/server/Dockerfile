@@ -7,32 +7,29 @@ WORKDIR /app/apps/server
 COPY apps/server/package*.json ./
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci --verbose
+RUN npm install
 
 # Copy prisma schema
 COPY apps/server/prisma ./prisma
 
 # Generate Prisma client
-RUN npx prisma generate || true
+RUN npx prisma generate
 
 # Copy source files
 COPY apps/server/src ./src
 COPY apps/server/tsconfig.json ./
 
-# Build TypeScript with verbose output
-RUN npm run build 2>&1 || (echo "Build failed, showing error above" && exit 1)
+# Build TypeScript
+RUN npm run build
 
 # Production stage
 FROM node:18-slim AS production
 
 WORKDIR /app/apps/server
 
-# Install only production dependencies
-RUN npm ci --only=production --verbose || true
-
-# Copy built files and dependencies from builder
-COPY --from=builder /app/apps/server/dist ./dist
+# Copy node_modules from builder to avoid reinstalling
 COPY --from=builder /app/apps/server/node_modules ./node_modules
+COPY --from=builder /app/apps/server/dist ./dist
 COPY --from=builder /app/apps/server/prisma ./prisma
 COPY apps/server/package*.json ./
 
