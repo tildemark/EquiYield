@@ -7,7 +7,7 @@ WORKDIR /app/apps/server
 COPY apps/server/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy prisma schema
 COPY apps/server/prisma ./prisma
@@ -27,24 +27,18 @@ FROM node:18-alpine AS production
 
 WORKDIR /app/apps/server
 
-# Install production dependencies only
-COPY apps/server/package*.json ./
-RUN npm install --production
-
-# Copy built files and Prisma schema
+# Copy built files and dependencies from builder
 COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/apps/server/node_modules ./node_modules
 COPY --from=builder /app/apps/server/prisma ./prisma
-COPY --from=builder /app/apps/server/node_modules/.prisma ./node_modules/.prisma
-
-# Copy migration files
-COPY apps/server/prisma/migrations ./prisma/migrations
+COPY apps/server/package*.json ./
 
 # Expose port
 EXPOSE 4000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
 # Run migrations and start server
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

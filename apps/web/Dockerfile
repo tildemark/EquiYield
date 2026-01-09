@@ -7,7 +7,7 @@ WORKDIR /app/apps/web
 COPY apps/web/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source files
 COPY apps/web ./
@@ -24,15 +24,12 @@ FROM node:18-alpine AS production
 
 WORKDIR /app/apps/web
 
-# Install production dependencies only
-COPY apps/web/package*.json ./
-RUN npm install --production
-
-# Copy built files
+# Copy built files and dependencies from builder
 COPY --from=builder /app/apps/web/.next ./.next
 COPY --from=builder /app/apps/web/public ./public
+COPY --from=builder /app/apps/web/node_modules ./node_modules
 COPY --from=builder /app/apps/web/next.config.mjs ./
-COPY --from=builder /app/apps/web/package.json ./
+COPY apps/web/package*.json ./
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -51,7 +48,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
 # Start Next.js
 CMD ["npm", "start"]
