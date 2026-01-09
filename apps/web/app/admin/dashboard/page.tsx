@@ -1,21 +1,45 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+'use client';
 
-async function fetchDashboard() {
-  const res = await fetch(`${API_BASE}/api/admin/dashboard`, {
-    headers: { 'x-admin-token': ADMIN_TOKEN },
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error('Failed to load dashboard');
-  return res.json();
+import { useEffect, useState } from 'react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
 function formatCurrency(value: number): string {
   return `₱${value.toLocaleString()}`;
 }
 
-export default async function DashboardPage() {
-  const data = await fetchDashboard();
+export default function DashboardPage() {
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/dashboard`, {
+          headers: getAuthHeaders(),
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error('Failed to load dashboard');
+        const data = await res.json();
+        setData(data);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDashboard();
+  }, []);
+
+  if (loading) return <div>Loading dashboard…</div>;
+  if (error) return <div className="text-red-400">{error}</div>;
+  if (!data) return <div>No data available</div>;
 
   const metrics = [
     { label: 'Total Members', value: data.totalMembers },

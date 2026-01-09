@@ -7,9 +7,13 @@ type User = { id: number; email: string; share_count: number; full_name: string 
 type SystemConfig = { min_shares: number; max_shares: number; share_value: number };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
 
-export default function ContributionForm() {
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+export default function ContributionForm({ onSuccess }: { onSuccess?: () => void }) {
   const [users, setUsers] = useState<User[]>([]);
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [userId, setUserId] = useState<number | ''>('');
@@ -22,8 +26,8 @@ export default function ContributionForm() {
   useEffect(() => {
     async function load() {
       const [uRes, cRes] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/users`, { headers: { 'x-admin-token': ADMIN_TOKEN }, cache: 'no-store' }),
-        fetch(`${API_BASE}/api/admin/system-config`, { headers: { 'x-admin-token': ADMIN_TOKEN }, cache: 'no-store' }),
+        fetch(`${API_BASE}/api/admin/users`, { headers: getAuthHeaders(), cache: 'no-store' }),
+        fetch(`${API_BASE}/api/admin/system-config`, { headers: getAuthHeaders(), cache: 'no-store' }),
       ]);
       const [u, c] = await Promise.all([uRes.json(), cRes.json()]);
       setUsers(u);
@@ -50,7 +54,7 @@ export default function ContributionForm() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-admin-token': ADMIN_TOKEN,
+        ...getAuthHeaders(),
       },
       body: JSON.stringify({
         userId,
@@ -62,7 +66,17 @@ export default function ContributionForm() {
     });
 
     const data = await res.json();
-    if (res.ok) setStatus(`Saved. Status: ${data.status}. Expected: PHP ${data.expected}`);
+    if (res.ok) {
+      setStatus(`Saved. Status: ${data.status}. Expected: PHP ${data.expected}`);
+      // Reset form
+      setUserId('');
+      setAmount('');
+      setDatePaid('');
+      setMethod('GCASH');
+      setRef('');
+      // Call success callback to refresh payment list
+      if (onSuccess) onSuccess();
+    }
     else setStatus(`Error: ${data.error ? JSON.stringify(data.error) : 'Unknown'}`);
   }
 

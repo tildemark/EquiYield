@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 interface PayoutResult {
   created: Array<{ userId: number; full_name: string; amount: number; id: number }>;
@@ -37,7 +41,7 @@ export default function BulkPayoutForm() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': ADMIN_TOKEN,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           year: Number(year),

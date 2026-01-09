@@ -43,7 +43,11 @@ type UserDetail = {
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 // Helper: Get current year and cycle
 function getCurrentCycle(): { year: number; cycle: number } {
@@ -66,6 +70,20 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
   const [expandedCycles, setExpandedCycles] = useState<Set<string>>(new Set());
   const [resetBusy, setResetBusy] = useState(false);
   const [newPassword, setNewPassword] = useState<string | null>(null);
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    phone_number: '',
+    email: '',
+    share_count: 0,
+    gcashNumber: '',
+    bankName: '',
+    bankAccountNumber: '',
+  });
 
   // Dividend payouts (admin view)
   type Payout = {
@@ -103,16 +121,72 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
-        headers: { 'x-admin-token': ADMIN_TOKEN },
+        headers: getAuthHeaders(),
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load user details');
       const data = await res.json();
       setUser(data);
+      // Initialize edit form with user data
+      setEditForm({
+        full_name: data.full_name || '',
+        phone_number: data.phone_number || '',
+        email: data.email || '',
+        share_count: data.share_count || 0,
+        gcashNumber: data.gcashNumber || '',
+        bankName: data.bankName || '',
+        bankAccountNumber: data.bankAccountNumber || '',
+      });
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function startEditing() {
+    setIsEditing(true);
+    setEditError('');
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setEditError('');
+    if (user) {
+      setEditForm({
+        full_name: user.full_name || '',
+        phone_number: user.phone_number || '',
+        email: user.email || '',
+        share_count: user.share_count || 0,
+        gcashNumber: user.gcashNumber || '',
+        bankName: user.bankName || '',
+        bankAccountNumber: user.bankAccountNumber || '',
+      });
+    }
+  }
+
+  async function saveEdits() {
+    setEditBusy(true);
+    setEditError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(editForm),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save changes');
+      setIsEditing(false);
+      // Reload full user data including relationships
+      await load();
+    } catch (e: any) {
+      setEditError(e.message);
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -126,7 +200,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
       setPayoutError('');
       try {
         const res = await fetch(`${API_BASE}/api/admin/dividends/payouts?userId=${userId}`, {
-          headers: { 'x-admin-token': ADMIN_TOKEN },
+          headers: getAuthHeaders(),
           cache: 'no-store',
         });
         const data = await res.json();
@@ -148,7 +222,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
     try {
       const res = await fetch(`${API_BASE}/api/admin/users/${userId}/reset-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ sendEmail: false }),
       });
       const data = await res.json();
@@ -181,7 +255,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': ADMIN_TOKEN,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({ isEligible: !currentStatus, reason }),
       });
@@ -265,21 +339,130 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
 
       {/* Member Info Card */}
       <div className="card">
-        <h2 className="text-2xl font-bold mb-4">{user.full_name}</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Email:</span> {user.email}
-          </div>
-          <div>
-            <span className="text-gray-400">Phone:</span> {user.phone_number}
-          </div>
-          <div>
-            <span className="text-gray-400">Shares:</span> {user.share_count}
-          </div>
-          <div>
-            <span className="text-gray-400">Role:</span> {user.role}
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold">{user.full_name}</h2>
+          <button className="btn btn-secondary text-sm" onClick={isEditing ? cancelEditing : startEditing}>
+            {isEditing ? 'Cancel' : 'Edit'}
+          </button>
         </div>
+
+        {editError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {editError}
+          </div>
+        )}
+
+        {!isEditing ? (
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-400">Email:</span> {user.email}
+            </div>
+            <div>
+              <span className="text-gray-400">Phone:</span> {user.phone_number}
+            </div>
+            <div>
+              <span className="text-gray-400">Shares:</span> {user.share_count}
+            </div>
+            <div>
+              <span className="text-gray-400">Role:</span> {user.role}
+            </div>
+            {user.gcashNumber && (
+              <div>
+                <span className="text-gray-400">GCash:</span> {user.gcashNumber}
+              </div>
+            )}
+            {user.bankName && (
+              <div>
+                <span className="text-gray-400">Bank:</span> {user.bankName}
+              </div>
+            )}
+            {user.bankAccountNumber && (
+              <div>
+                <span className="text-gray-400">Bank Account:</span> {user.bankAccountNumber}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Full Name</label>
+                <input
+                  className="input"
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Email</label>
+                <input
+                  className="input"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Phone</label>
+                <input
+                  className="input"
+                  value={editForm.phone_number}
+                  onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Shares</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={editForm.share_count}
+                  onChange={(e) => setEditForm({ ...editForm, share_count: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-semibold text-sm mb-3">Payment Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">GCash Number</label>
+                  <input
+                    className="input"
+                    value={editForm.gcashNumber}
+                    onChange={(e) => setEditForm({ ...editForm, gcashNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Bank Name</label>
+                  <input
+                    className="input"
+                    value={editForm.bankName}
+                    onChange={(e) => setEditForm({ ...editForm, bankName: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Bank Account Number</label>
+                  <input
+                    className="input"
+                    value={editForm.bankAccountNumber}
+                    onChange={(e) => setEditForm({ ...editForm, bankAccountNumber: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <button className="btn btn-primary" onClick={saveEdits} disabled={editBusy}>
+                {editBusy ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button className="btn btn-secondary" onClick={cancelEditing} disabled={editBusy}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 flex items-center gap-3">
           <button className="btn btn-secondary" onClick={resetPassword} disabled={resetBusy}>{resetBusy ? 'Resetting…' : 'Reset Password'}</button>
           {newPassword && (
@@ -515,7 +698,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
               try {
                 const res = await fetch(`${API_BASE}/api/admin/dividends/payouts`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+                  headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                   body: JSON.stringify({
                     userId,
                     year: pyYear,
@@ -533,7 +716,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to record payout');
                 // Refresh payout list
-                const list = await fetch(`${API_BASE}/api/admin/dividends/payouts?userId=${userId}`, { headers: { 'x-admin-token': ADMIN_TOKEN } });
+                const list = await fetch(`${API_BASE}/api/admin/dividends/payouts?userId=${userId}`, { headers: getAuthHeaders() });
                 setPayouts(await list.json());
                 setPyRef('');
               } catch (e: any) {

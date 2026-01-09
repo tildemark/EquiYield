@@ -17,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a className="underline" href="/admin/dashboard">Dashboard</a>
               <a className="underline" href="/admin/users">Members</a>
               <a className="underline" href="/admin/loans">Loans</a>
+              <a className="underline" href="/admin/payments">Payments</a>
               <a className="underline" href="/admin/dividends">Dividends</a>
               <a className="underline" href="/admin/config">Config</a>
             </nav>

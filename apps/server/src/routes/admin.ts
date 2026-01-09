@@ -223,6 +223,44 @@ router.get('/users/:id', async (req, res) => {
   res.json(user);
 });
 
+// Update user details
+const updateUserBody = z.object({
+  full_name: z.string().min(1).optional(),
+  phone_number: z.string().optional(),
+  email: z.string().email().optional(),
+  share_count: z.number().int().nonnegative().optional(),
+  gcashNumber: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+});
+
+router.put('/users/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid user id' });
+
+  const parsed = updateUserBody.safeParse(req.body);
+  if (!parsed.success) {
+    const errors = parsed.error.flatten().fieldErrors;
+    const messages = Object.entries(errors).map(([field, msgs]) => `${field}: ${msgs?.join(', ')}`).join('; ');
+    return res.status(400).json({ error: messages || 'Invalid user data' });
+  }
+
+  // Check if email is already taken by another user
+  if (parsed.data.email) {
+    const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    if (existing && existing.id !== id) {
+      return res.status(400).json({ error: 'Email already in use by another member' });
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data: parsed.data,
+  });
+
+  res.json(updated);
+});
+
 // Set cycle-based dividend eligibility (reason required when marking ineligible)
 const cycleEligibilityBody = z.object({
   isEligible: z.boolean(),
@@ -269,6 +307,20 @@ const contributionBody = z.object({
   date_paid: z.string().datetime().or(z.date()),
   method: z.enum(['GCASH', 'INSTAPAY', 'BANK_TRANSFER', 'CASH']),
   reference_number: z.string().min(3),
+});
+
+// List all contributions with user info
+router.get('/contributions', async (req, res) => {
+  const contributions = await prisma.contribution.findMany({
+    orderBy: { date_paid: 'desc' },
+    include: {
+      user: {
+        select: { id: true, full_name: true, email: true },
+      },
+    },
+  });
+
+  res.json(contributions);
 });
 
 router.post('/contributions', async (req, res) => {
@@ -341,7 +393,11 @@ router.get('/loans', async (req, res) => {
 
 router.post('/loans', async (req, res) => {
   const parsed = loanBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (!parsed.success) {
+    const errors = parsed.error.flatten().fieldErrors;
+    const messages = Object.entries(errors).map(([field, msgs]) => `${field}: ${msgs?.join(', ')}`).join('; ');
+    return res.status(400).json({ error: messages || 'Invalid loan data' });
+  }
 
   const {
     borrowerType,
@@ -366,8 +422,11 @@ router.post('/loans', async (req, res) => {
 
   const monthlyRateBps = borrowerType === 'MEMBER' ? 500 : 1000; // 5% vs 10%
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const dueDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+  
+  // Calculate due date by adding termMonths to current date
+  const dueDate = new Date(now);
+  dueDate.setMonth(dueDate.getMonth() + termMonths);
+  dueDate.setHours(23, 59, 59, 999);
 
   // Calculate total interest: principal × (monthly_rate × term_months)
   const monthlyRate = monthlyRateBps / 10000; // 0.05 for members, 0.10 for non-members
@@ -417,8 +476,111 @@ router.put('/loans/:id/status', async (req, res) => {
   const loan = await prisma.loan.findUnique({ where: { id } });
   if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
-  const updated = await prisma.loan.update({ where: { id }, data: { status: parsed.data.status } });
+  const updateData: any = { status: parsed.data.status };
+  
+  // Set releasedAt when status changes to RELEASED
+  if (parsed.data.status === 'RELEASED' && !loan.releasedAt) {
+    updateData.releasedAt = new Date();
+  }
+  
+  // Set settledAt when status changes to PAID
+  if (parsed.data.status === 'PAID' && !loan.settledAt) {
+    updateData.settledAt = new Date();
+  }
+
+  const updated = await prisma.loan.update({ where: { id }, data: updateData });
   res.json(updated);
+});
+
+// Record loan payment
+const loanPaymentBody = z.object({
+  amount: z.number().int().positive(),
+});
+
+router.post('/loans/:id/payment', async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid loan id' });
+  
+  const parsed = loanPaymentBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const loan = await prisma.loan.findUnique({ 
+    where: { id },
+    include: { payments: true }
+  });
+  if (!loan) return res.status(404).json({ error: 'Loan not found' });
+  
+  if (loan.status === 'PAID') {
+    return res.status(400).json({ error: 'Loan is already fully paid' });
+  }
+
+  const { amount } = parsed.data;
+  const totalDue = loan.principal + loan.interest;
+  
+  // Calculate total paid
+  const totalPaid = loan.payments.reduce((sum, p) => sum + p.amount, 0) + amount;
+  
+  // Create payment record
+  await prisma.loanPayment.create({
+    data: { loanId: id, amount }
+  });
+
+  // Check if fully paid
+  const isPaid = totalPaid >= totalDue;
+  
+  const updateData: any = {};
+  if (isPaid) {
+    updateData.status = 'PAID';
+    updateData.settledAt = new Date();
+  }
+
+  const updated = await prisma.loan.update({ where: { id }, data: updateData });
+  res.json({ 
+    message: `Payment of ₱${amount} recorded. Remaining balance: ₱${Math.max(0, totalDue - totalPaid)}${isPaid ? '. Loan automatically marked as PAID.' : ''}`, 
+    loan: updated 
+  });
+});
+
+// Get loan details with payment history
+router.get('/loans/:id/details', async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid loan id' });
+  
+  const loan = await prisma.loan.findUnique({
+    where: { id },
+    include: {
+      user: { select: { id: true, full_name: true, email: true, phone_number: true } },
+      payments: { orderBy: { createdAt: 'asc' } },
+      coMakers: { include: { user: { select: { id: true, full_name: true } } } }
+    }
+  });
+  
+  if (!loan) return res.status(404).json({ error: 'Loan not found' });
+  
+  const totalDue = loan.principal + loan.interest;
+  const totalPaid = loan.payments.reduce((sum, p) => sum + p.amount, 0);
+  const balance = totalDue - totalPaid;
+  
+  // Calculate amortization schedule
+  const amortization = [];
+  const releaseDate = loan.releasedAt || new Date(loan.createdAt);
+  for (let i = 1; i <= loan.termMonths; i++) {
+    const dueDate = new Date(releaseDate);
+    dueDate.setMonth(dueDate.getMonth() + i);
+    amortization.push({
+      month: i,
+      amount: loan.monthlyAmortization,
+      dueDate: dueDate.toISOString().split('T')[0],
+    });
+  }
+  
+  res.json({
+    ...loan,
+    totalDue,
+    totalPaid,
+    balance,
+    amortization,
+  });
 });
 
 // System config for UI consumption

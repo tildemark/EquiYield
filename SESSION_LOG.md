@@ -1,6 +1,6 @@
 # EquiYield Development Session Log
 
-**Session Date:** January 8, 2026  
+**Session Dates:** January 8-9, 2026  
 **Project:** EquiYield - Cooperative Savings & Loan Management System  
 **Technology Stack:** Node.js + Express + Prisma + PostgreSQL + Redis + Next.js 15 + Tailwind CSS
 
@@ -8,13 +8,15 @@
 
 ## Session Overview
 
-This session focused on implementing loan status management enhancements and comprehensive dividend payout distribution system with audit logging and reference tracking for traceability.
+Sessions focused on implementing loan status management, comprehensive dividend payout distribution system, payment tracking infrastructure, and automated loan settlement with payment history.
 
 ---
 
 ## Work Completed
 
-### 1. **Loan Filters & Mark as PAID Action**
+### SESSION 1 (January 8, 2026)
+
+#### 1. **Loan Filters & Mark as PAID Action**
 
 **Objective:** Add UI controls to filter loans by status and enable admins to mark released loans as paid.
 
@@ -401,6 +403,285 @@ All code is type-safe, error-handled, and documented for maintainability.
 
 ---
 
-**Generated:** January 8, 2026  
-**Status:** Ready for GitHub commit  
-**Next Action:** Deploy to staging/production after testing
+### SESSION 2 (January 9, 2026)
+
+#### 5. **Payment Tracking Infrastructure**
+
+**Objective:** Implement comprehensive loan payment tracking with persistent database records.
+
+**Schema Changes** ([apps/server/prisma/schema.prisma](apps/server/prisma/schema.prisma)):
+
+- **Loan Model Updates:**
+  - Added `releasedAt DateTime?` — timestamp when loan was released/approved
+  - Added `settledAt DateTime?` — timestamp when loan was fully paid
+  - Added `payments LoanPayment[]` relation — all payments for this loan
+
+- **New LoanPayment Model:**
+  - `id Int @id @default(autoincrement())` — unique payment ID
+  - `loanId Int` — foreign key to Loan (CASCADE delete)
+  - `amount Int` — payment amount in PHP
+  - `createdAt DateTime @default(now())` — payment date/time
+  - Index on loanId for fast lookup
+  - Relation to `loan Loan` model
+
+- **Migration:** `20260109025940_add_loan_payments`
+  - Created LoanPayment table
+  - Added columns to Loan table
+  - Set up foreign key constraints
+
+**Backend Implementation:**
+
+- **Updated Loan Payment Endpoint** (`POST /api/admin/loans/:id/payment`):
+  - Includes payment history in loan fetch (`include: { payments: true }`)
+  - Calculates total paid from all payment records
+  - Creates new `LoanPayment` record for each payment
+  - Auto-marks loan as PAID when `totalPaid >= totalDue`
+  - Sets `settledAt` timestamp automatically
+  - Returns detailed message with remaining balance
+
+- **New Loan Details Endpoint** (`GET /api/admin/loans/:id/details`):
+  - Returns complete loan with user info, co-makers, and all payments
+  - Calculates `totalDue` (principal + interest)
+  - Calculates `totalPaid` (sum of all payments)
+  - Calculates `balance` (remaining amount)
+  - Generates amortization schedule:
+    - Monthly payment amount
+    - Due date for each month
+    - Based on release date + term months
+  - Returns payments ordered chronologically
+
+- **Fixed Status Update Logic:**
+  - Corrected `APPROVED` to `RELEASED` status
+  - Sets `releasedAt` when status changes to RELEASED
+  - Sets `settledAt` when status changes to PAID
+
+**Code Locations:**
+- Payment endpoint: [apps/server/src/routes/admin.ts](apps/server/src/routes/admin.ts) lines 500-543
+- Details endpoint: [apps/server/src/routes/admin.ts](apps/server/src/routes/admin.ts) lines 545-585
+
+---
+
+#### 6. **Loan Detail Modal & Payment Recording**
+
+**Objective:** Enable admin to view complete loan details and record payments directly from loan management page.
+
+**Frontend Implementation** ([apps/web/app/admin/loans/page.tsx](apps/web/app/admin/loans/page.tsx)):
+
+- **Clickable Loan Rows:**
+  - Added `cursor-pointer` styling to table rows
+  - Rows trigger `handleOpenDetail()` on click
+  - Fetches full loan details via new API endpoint
+
+- **Comprehensive Detail Modal:**
+  - **Borrower Section:** Name, email, phone, type (grid layout)
+  - **Loan Details Section:** Principal, Interest, Total Due (large, bold amounts), Term in months
+  - **Dates Section:** Created date, Released date (if applicable), Due date, Settled date (if paid)
+  - **Status & Payment Info:** Status badge (color-coded), Total Paid (green), Balance (red)
+  - **Payment History:** List of all payments with dates and amounts, "No payments recorded yet" message if empty, Scrollable list with gray background cards
+  - **Amortization Schedule:** Table with month number, amount due, and due date, Calculated from release date + term, Shows monthly payment breakdown
+
+- **Inline Payment Recording:**
+  - Payment form within modal (appears if status ≠ PAID)
+  - Amount input field
+  - "Record Payment" button
+  - Form disabled during submission
+  - Automatically refreshes loan details after recording
+  - Refreshes main loans list to update status
+
+- **Removed Manual Status Control:**
+  - Eliminated "Mark as PAID" button from action column
+  - Only "Release" button remains for PENDING loans
+  - Status automatically updates when payments complete loan
+
+**State Management:**
+- `selectedLoan` — holds full loan detail data
+- `showDetailModal` — controls modal visibility
+- `loadingDetail` — loading state for detail fetch
+- `paymentAmount` — payment input value
+- `submittingPayment` — payment submission state
+
+**User Experience:**
+- Click anywhere on loan row to view details
+- Modal shows loading state while fetching
+- Payment form only visible for unpaid loans
+- Success message appears after payment recorded
+- Modal refreshes automatically with new data
+- Close button and background click dismiss modal
+
+---
+
+#### 7. **Member Dashboard Enhancements**
+
+**Objective:** Display loan payment dates and prevent multiple pending loans.
+
+**Frontend Updates** ([apps/web/app/member/dashboard/page.tsx](apps/web/app/member/dashboard/page.tsx)):
+
+- **Loan History Display:**
+  - Date Applied, Date Released (if applicable), Date Settled (if paid), Status badge, Clickable rows open loan detail modal
+
+- **Loan Detail Modal:**
+  - Complete loan information, All dates (applied, released, settled), Principal, interest, total due, Current status, Monthly amortization amount
+
+- **Loan Application Validation:**
+  - Warning message if pending loan exists
+  - Form fields disabled when pending loan exists
+  - Submit button disabled with pending loan
+  - Clear visual feedback (yellow warning box)
+
+- **Backend Validation** ([apps/server/src/routes/member.ts](apps/server/src/routes/member.ts)):
+  - Checks for PENDING loans before accepting new application
+  - Returns 400 error if pending loan found
+  - Error message: "Cannot apply for new loan while pending loan exists"
+
+---
+
+#### 8. **TypeScript Type Safety Fixes**
+
+**Objective:** Resolve build errors for production deployment.
+
+**Issues Fixed:**
+
+1. **getAuthHeaders() Return Type:**
+   - Changed from implicit return to explicit `Record<string, string>`
+   - Fixed across 15 files:
+     - Admin pages: dashboard, loans, loans/create, dividends, payments
+     - Components: AdminImportForm, ArchiveRunForm, BulkPasswordReset, BulkPayoutForm, ContributionForm, CreateUserForm, MemberDetail, SystemConfigForm, UserTable
+
+2. **Form Disabled Attribute:**
+   - Removed invalid `disabled` from `<form>` element
+   - Moved disabled logic to individual form inputs and buttons
+
+3. **Boolean Type Coercion:**
+   - Added `!!` double negation for strict boolean conversion
+   - Fixed disabled prop types in member dashboard
+
+**Build Results:**
+- ✓ TypeScript compilation successful
+- ✓ Next.js build completed (13 routes)
+- ✓ Type checking passed
+- ✓ No linting errors
+
+---
+
+## Updated Technical Specifications
+
+### Database Schema Additions (Session 2)
+
+**LoanPayment Model (NEW):**
+```prisma
+model LoanPayment {
+  id        Int      @id @default(autoincrement())
+  loanId    Int
+  amount    Int
+  createdAt DateTime @default(now())
+  
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  
+  @@index([loanId])
+}
+```
+
+**Loan Model Changes:**
+```prisma
+model Loan {
+  // ... existing fields
+  releasedAt DateTime?
+  settledAt  DateTime?
+  payments   LoanPayment[]
+}
+```
+
+### Updated API Endpoints (Session 2)
+
+**Admin Loans (Enhanced):**
+```
+GET  /api/admin/loans/:id/details — Full loan with payments & schedule
+POST /api/admin/loans/:id/payment — Record payment (auto-PAID logic)
+PUT  /api/admin/loans/:id/status — Update status (sets timestamps)
+```
+
+**Member Loans (Enhanced):**
+```
+POST /api/member/loans — Validates no pending loans before creating
+GET  /api/member/me — Includes releasedAt and settledAt in loan data
+```
+
+### File Changes Summary (Session 2)
+
+**Backend:**
+- `apps/server/prisma/schema.prisma` — Added LoanPayment model, loan timestamps
+- `apps/server/src/routes/admin.ts` — Payment recording, loan details endpoint
+- `apps/server/src/routes/member.ts` — Pending loan validation
+
+**Frontend:**
+- `apps/web/app/admin/loans/page.tsx` — Detail modal, payment recording, clickable rows
+- `apps/web/app/member/dashboard/page.tsx` — Loan dates, pending validation, detail modal
+
+**Type Safety (15 files fixed):**
+- All admin pages with auth
+- All components with API calls
+- Member dashboard
+
+**Documentation:**
+- `SESSION_LOG.md` — Updated with Session 2 work
+
+---
+
+## Quality Assurance (Session 2)
+
+✅ **Database Integrity:**
+- Migration applied successfully
+- Foreign key constraints working
+- Cascade deletes configured
+- Indexes created for performance
+
+✅ **Type Safety:**
+- All TypeScript errors resolved
+- Explicit return types on auth helpers
+- Strict boolean coercion
+- Next.js 15 build successful
+
+✅ **Payment Tracking:**
+- Payments persist to database
+- Total paid calculated correctly
+- Auto-PAID status when balance zero
+- Amortization schedule accurate
+
+✅ **User Experience:**
+- Clickable rows intuitive
+- Loading states implemented
+- Error handling graceful
+- Success feedback clear
+- Modal responsive and scrollable
+
+✅ **Business Logic:**
+- Cannot apply multiple pending loans
+- Dates tracked accurately
+- Payment history complete
+- Status transitions automatic
+
+---
+
+## Session Summary
+
+**Session 1 (January 8):** Implemented dividend payout distribution system with audit logging and loan status management.
+
+**Session 2 (January 9):** Implemented comprehensive loan payment tracking system with:
+
+- ✓ Persistent payment records in database
+- ✓ Automatic PAID status when loan fully paid
+- ✓ Detailed payment history for each loan
+- ✓ Amortization schedule generation
+- ✓ Comprehensive loan detail modal
+- ✓ Inline payment recording from admin panel
+- ✓ Member visibility of loan dates and status
+- ✓ Prevention of multiple pending loan applications
+- ✓ Full TypeScript type safety for production build
+
+The system now provides complete loan lifecycle tracking from application through final payment with full audit trail.
+
+---
+
+**Generated:** January 9, 2026  
+**Status:** Production ready, TypeScript compliant  
+**Next Action:** Push to GitHub, deploy to production

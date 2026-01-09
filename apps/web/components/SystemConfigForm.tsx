@@ -11,7 +11,11 @@ type Config = {
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 export default function SystemConfigForm() {
   const [config, setConfig] = useState<Config | null>(null);
@@ -25,7 +29,7 @@ export default function SystemConfigForm() {
   useEffect(() => {
     async function load() {
       const res = await fetch(`${API_BASE}/api/admin/system-config`, {
-        headers: { 'x-admin-token': ADMIN_TOKEN },
+        headers: getAuthHeaders(),
         cache: 'no-store',
       });
       const data = await res.json();
@@ -47,7 +51,7 @@ export default function SystemConfigForm() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'x-admin-token': ADMIN_TOKEN,
+        ...getAuthHeaders(),
       },
       body: JSON.stringify({
         min_shares: Number(minShares),

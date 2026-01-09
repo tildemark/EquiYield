@@ -59,12 +59,20 @@ router.post('/loans', async (req, res) => {
   const parsed = memberLoanBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const [user, cfg] = await Promise.all([
+  const [user, cfg, pendingLoans] = await Promise.all([
     prisma.user.findUnique({ where: { id: authUser.id } }),
     getSystemConfigCached(),
+    prisma.loan.findMany({
+      where: { userId: authUser.id, status: 'PENDING' },
+    }),
   ]);
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.archivedAt) return res.status(403).json({ error: 'Account archived' });
+  
+  // Check if user has pending loans
+  if (pendingLoans.length > 0) {
+    return res.status(400).json({ error: 'Cannot apply for a new loan while you have pending loans' });
+  }
 
   const { principal, termMonths } = parsed.data;
   if (principal < cfg.min_loan_amount || principal > cfg.max_loan_amount) {

@@ -4,8 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 interface Member {
   id: number;
@@ -48,7 +52,7 @@ export default function CreateLoanPage() {
     const fetchMembers = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/admin/users?pageSize=1000`, {
-          headers: { 'x-admin-token': ADMIN_TOKEN },
+          headers: getAuthHeaders(),
           cache: 'no-store',
         });
         if (res.ok) {
@@ -64,7 +68,7 @@ export default function CreateLoanPage() {
     const fetchAvailableFunds = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/admin/funds-available`, {
-          headers: { 'x-admin-token': ADMIN_TOKEN },
+          headers: getAuthHeaders(),
           cache: 'no-store',
         });
         if (res.ok) {
@@ -155,14 +159,15 @@ export default function CreateLoanPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': ADMIN_TOKEN,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to create loan');
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+        throw new Error(errorMsg || 'Failed to create loan');
       }
 
       setSuccess('Loan created successfully!');

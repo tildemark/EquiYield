@@ -3,7 +3,11 @@
 import { useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
   const [busy, setBusy] = useState(false);
@@ -18,7 +22,7 @@ export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
     try {
       const res = await fetch(`${API_BASE}/api/admin/users/bulk-passwords`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ userIds, sendEmail }),
       });
       const data = await res.json();

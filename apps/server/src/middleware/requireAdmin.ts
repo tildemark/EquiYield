@@ -1,14 +1,33 @@
 import { Request, Response, NextFunction } from 'express';
+import { Role } from '@prisma/client';
+import { verifyToken } from '../services/auth.js';
+import { prisma } from '../prisma.js';
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const header = req.header('x-admin-token');
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) {
-    return res.status(500).json({ error: 'ADMIN_TOKEN not configured' });
+export type AuthUser = { id: number; role: Role };
+
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const header = req.header('authorization');
+    if (!header || !header.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = header.replace('Bearer ', '').trim();
+    if (!token) return res.status(401).json({ error: 'Token missing' });
+
+    const payload = verifyToken(token);
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!user || user.archivedAt) {
+      return res.status(403).json({ error: 'Account inactive' });
+    }
+
+    if (user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Forbidden: admin privileges required' });
+    }
+
+    (req as any).authUser = { id: user.id, role: user.role } as AuthUser;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
-  if (!header || header !== token) {
-    return res.status(403).json({ error: 'Forbidden: admin token required' });
-  }
-  (req as any).adminUserId = 0; // placeholder for auditing when using static token
-  next();
 }

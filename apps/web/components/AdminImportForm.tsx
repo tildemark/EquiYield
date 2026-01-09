@@ -3,7 +3,6 @@
 import { useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
 
 export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -11,9 +10,40 @@ export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
-  const downloadTemplate = () => {
-    const url = `${API_BASE}/api/admin/users/import/template`;
-    window.open(url + `?t=${Date.now()}`);
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('eq_admin_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const token = localStorage.getItem('eq_admin_token');
+      if (!token) {
+        setStatus('Error: Not authenticated');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/admin/users/import/template`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Download failed');
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'equiyield_member_import.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (e: any) {
+      setStatus(`Error: ${e.message}`);
+    }
   };
 
   const upload = async () => {
@@ -25,7 +55,7 @@ export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
       form.append('file', file);
       const res = await fetch(`${API_BASE}/api/admin/users/import`, {
         method: 'POST',
-        headers: { 'x-admin-token': ADMIN_TOKEN },
+        headers: getAuthHeaders(),
         body: form,
       });
       const data = await res.json();

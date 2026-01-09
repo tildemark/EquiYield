@@ -3,8 +3,12 @@
 import { useState, useEffect } from 'react';
 import BulkPayoutForm from '../../../components/BulkPayoutForm';
 
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 interface DividendPayout {
   id: number;
@@ -44,7 +48,7 @@ export default function DividendsPage() {
       if (params?.year) url += `?year=${params.year}`;
       
       const res = await fetch(url, {
-        headers: { 'x-admin-token': ADMIN_TOKEN },
+        headers: getAuthHeaders(),
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to fetch payouts');

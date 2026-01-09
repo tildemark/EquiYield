@@ -16,7 +16,11 @@ type User = {
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('eq_admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 type PagedResponse<T> = {
   data: T[];
@@ -40,7 +44,7 @@ export default function UserTable({ refreshToken, onIdsChange }: { refreshToken?
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/admin/users?page=${page}&pageSize=${pageSize}`, {
-        headers: { 'x-admin-token': ADMIN_TOKEN },
+        headers: getAuthHeaders(),
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load users');

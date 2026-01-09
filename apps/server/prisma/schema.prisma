@@ -110,9 +110,22 @@ model Loan {
   monthlyAmortization Int          // PHP (monthly payment amount)
   dueDate            DateTime
   status             String        @default("PENDING")
+  releasedAt         DateTime?     // Date when loan was released/approved
+  settledAt          DateTime?     // Date when loan was fully paid
+  payments           LoanPayment[]
   coMakers           LoanCoMaker[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+}
+
+model LoanPayment {
+  id        Int      @id @default(autoincrement())
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId    Int
+  amount    Int      // PHP
+  createdAt DateTime @default(now())
+
+  @@index([loanId])
 }
 
 model LoanCoMaker {
