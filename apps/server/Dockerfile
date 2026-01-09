@@ -12,7 +12,6 @@ RUN npm ci
 
 # Copy source files
 COPY apps/server ./apps/server
-COPY prisma ./apps/server/prisma
 
 # Generate Prisma client
 WORKDIR /app/apps/server
