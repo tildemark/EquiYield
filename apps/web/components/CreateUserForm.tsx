@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -15,12 +14,16 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
   const [shareCount, setShareCount] = useState('0');
+  const [gcashNumber, setGcashNumber] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [status, setStatus] = useState('');
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('');
 
+    const API_BASE = getApiBaseUrl();
     const res = await fetch(`${API_BASE}/api/admin/users`, {
       method: 'POST',
       headers: {
@@ -33,6 +36,9 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
         phone_number: phone,
         role,
         share_count: Number(shareCount),
+        gcashNumber: gcashNumber || undefined,
+        bankName: bankName || undefined,
+        bankAccountNumber: bankAccountNumber || undefined,
       }),
     });
 
@@ -43,6 +49,9 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
       setEmail('');
       setPhone('');
       setShareCount('0');
+      setGcashNumber('');
+      setBankName('');
+      setBankAccountNumber('');
       if (onSuccess) onSuccess();
     } else {
       setStatus(`Error: ${data.error ? JSON.stringify(data.error) : 'Unknown'}`);
@@ -55,7 +64,7 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="label">Full Name</label>
+          <label className="label">Full Name *</label>
           <input
             className="input"
             value={fullName}
@@ -64,7 +73,7 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
           />
         </div>
         <div>
-          <label className="label">Phone Number</label>
+          <label className="label">Phone Number *</label>
           <input
             className="input"
             value={phone}
@@ -76,7 +85,7 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-          <label className="label">Email</label>
+          <label className="label">Email *</label>
           <input
             className="input"
             type="email"
@@ -86,20 +95,50 @@ export default function CreateUserForm({ onSuccess }: { onSuccess?: () => void }
           />
         </div>
         <div>
-          <label className="label">Role</label>
+          <label className="label">Role *</label>
           <select className="input" value={role} onChange={(e) => setRole(e.target.value as any)}>
             <option value="MEMBER">Member</option>
             <option value="ADMIN">Admin</option>
           </select>
         </div>
         <div>
-          <label className="label">Initial Shares</label>
+          <label className="label">Initial Shares *</label>
           <input
             className="input"
             type="number"
             min="0"
             value={shareCount}
             onChange={(e) => setShareCount(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label className="label">GCash Number</label>
+          <input
+            className="input"
+            value={gcashNumber}
+            onChange={(e) => setGcashNumber(e.target.value)}
+            placeholder="e.g., +639123456789"
+          />
+        </div>
+        <div>
+          <label className="label">Bank Name</label>
+          <input
+            className="input"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            placeholder="e.g., BDO, Metrobank"
+          />
+        </div>
+        <div>
+          <label className="label">Bank Account Number</label>
+          <input
+            className="input"
+            value={bankAccountNumber}
+            onChange={(e) => setBankAccountNumber(e.target.value)}
+            placeholder="e.g., 123456789"
           />
         </div>
       </div>

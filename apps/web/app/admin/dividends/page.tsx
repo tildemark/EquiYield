@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import BulkPayoutForm from '../../../components/BulkPayoutForm';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -44,6 +43,7 @@ export default function DividendsPage() {
     try {
       setLoading(true);
       setError('');
+      const API_BASE = getApiBaseUrl();
       let url = `${API_BASE}/api/admin/dividends/payouts`;
       if (params?.year) url += `?year=${params.year}`;
       

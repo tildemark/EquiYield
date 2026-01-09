@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -37,6 +36,7 @@ export default function BulkPayoutForm() {
 
     setLoading(true);
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/dividends/payouts/bulk`, {
         method: 'POST',
         headers: {

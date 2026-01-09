@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -51,6 +50,7 @@ export default function CreateLoanPage() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/admin/users?pageSize=1000`, {
           headers: getAuthHeaders(),
           cache: 'no-store',
@@ -67,6 +67,7 @@ export default function CreateLoanPage() {
 
     const fetchAvailableFunds = async () => {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/admin/funds-available`, {
           headers: getAuthHeaders(),
           cache: 'no-store',
@@ -155,6 +156,7 @@ export default function CreateLoanPage() {
         coMakers: coMakers.map((id) => parseInt(id)),
       };
 
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/loans`, {
         method: 'POST',
         headers: {

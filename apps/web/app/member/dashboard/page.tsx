@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 type Me = {
   id: number;
@@ -16,7 +15,41 @@ type Me = {
   share_count: number;
   forcePasswordReset: boolean;
   contributions: Array<{ id: number; amount: number; date_paid: string; status: string }>;
-  loans: Array<{ id: number; principal: number; interest: number; status: string; createdAt: string; releasedAt?: string; settledAt?: string }>;
+  loans: Array<{ 
+    id: number; 
+    principal: number; 
+    interest: number; 
+    status: string; 
+    createdAt: string; 
+    releasedAt?: string; 
+    settledAt?: string;
+    dueDate?: string;
+    monthlyAmortization: number;
+    totalPaid: number;
+    remainingBalance: number;
+    isPastDue: boolean;
+    payments: Array<{ id: number; amount: number; createdAt: string }>;
+  }>;
+  coMakerOnLoans?: Array<{
+    id: number;
+    loan: {
+      id: number;
+      principal: number;
+      interest: number;
+      status: string;
+      createdAt: string;
+      releasedAt?: string;
+      settledAt?: string;
+      dueDate?: string;
+      monthlyAmortization: number;
+      termMonths: number;
+      borrowerName: string;
+      borrowerEmail: string;
+      user?: { id: number; full_name: string; email: string };
+      payments: Array<{ id: number; amount: number; createdAt: string }>;
+    };
+  }>;
+  totalContributions: number;
 };
 
 type SystemConfig = { share_value: number; min_loan_amount: number; max_loan_amount: number };
@@ -74,6 +107,7 @@ export default function MemberDashboard() {
     if (!token) return;
     (async () => {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/member/me`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -91,6 +125,7 @@ export default function MemberDashboard() {
     if (!token) return;
     (async () => {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/member/dividends`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -108,6 +143,7 @@ export default function MemberDashboard() {
     if (!token) return;
     (async () => {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/admin/system-config`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -125,6 +161,7 @@ export default function MemberDashboard() {
     if (!token) return;
     setBusy(true);
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/member/loans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -136,6 +173,7 @@ export default function MemberDashboard() {
       setTermMonths('');
       setShowLoanForm(false);
       // reload profile
+      const API_BASE = getApiBaseUrl();
       const meRes = await fetch(`${API_BASE}/api/member/me`, { headers: { Authorization: `Bearer ${token}` } });
       setMe(await meRes.json());
     } catch (e: any) {
@@ -151,6 +189,7 @@ export default function MemberDashboard() {
     setPwBusy(true);
     setPwStatus('');
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -465,6 +504,62 @@ export default function MemberDashboard() {
 
       {me && (
         <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="card">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Total Contributions</h3>
+              <div className="text-3xl font-bold text-green-600">₱{me.totalContributions.toLocaleString()}</div>
+              <p className="text-xs text-gray-400 mt-1">
+                {me.contributions.length} payment{me.contributions.length !== 1 ? 's' : ''} recorded
+              </p>
+            </div>
+
+            {me.loans.filter(l => l.status === 'ACTIVE' || l.status === 'APPROVED').length > 0 && (
+              <div className="card">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Active Loans</h3>
+                {me.loans
+                  .filter(l => l.status === 'ACTIVE' || l.status === 'APPROVED')
+                  .map(loan => {
+                    const nextDue = loan.dueDate ? new Date(loan.dueDate) : null;
+                    const isPastDue = loan.isPastDue;
+                    
+                    return (
+                      <div key={loan.id} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Loan Amount:</span>
+                          <span className="font-semibold text-lg">₱{loan.principal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Monthly Amortization:</span>
+                          <span className="font-semibold">₱{loan.monthlyAmortization.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Remaining Balance:</span>
+                          <span className="font-semibold">₱{loan.remainingBalance.toLocaleString()}</span>
+                        </div>
+                        {nextDue && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-400">Due Date:</span>
+                            <span className={`font-semibold ${isPastDue ? 'text-red-600' : 'text-green-600'}`}>
+                              {nextDue.toLocaleDateString()}
+                              {isPastDue && ' (PAST DUE)'}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-400 pt-2 border-t border-gray-200">
+                          Status: {isPastDue ? (
+                            <span className="text-red-600 font-semibold">Past Due</span>
+                          ) : (
+                            <span className="text-green-600 font-semibold">On Time</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
           <div className="card">
             <h2 className="font-semibold mb-2">Profile</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -544,6 +639,71 @@ export default function MemberDashboard() {
               </div>
             )}
           </div>
+
+          {/* Co-Maker Loans */}
+          {me.coMakerOnLoans && me.coMakerOnLoans.length > 0 && (
+            <div className="card">
+              <h3 className="font-semibold mb-4">Co-Maker on Loans (View Only)</h3>
+              <p className="text-sm text-gray-400 mb-4">You are a co-maker on the following loans:</p>
+              <div className="divide-y">
+                {me.coMakerOnLoans.map((coMakerEntry) => {
+                  const loan = coMakerEntry.loan;
+                  const borrower = loan.user;
+                  const totalPaid = loan.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+                  const totalDue = loan.principal + loan.interest;
+                  const remainingBalance = totalDue - totalPaid;
+
+                  return (
+                    <div key={coMakerEntry.id} className="p-4 border-b last:border-b-0">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="font-semibold">Loan #{loan.id}</div>
+                          <div className="text-sm text-gray-400">
+                            Borrower: {borrower?.full_name || loan.borrowerName}
+                          </div>
+                          <div className="text-xs text-gray-500">{borrower?.email || loan.borrowerEmail}</div>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          loan.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' :
+                          loan.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                          loan.status === 'PAID' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {loan.status}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <div className="text-xs text-gray-500">Principal</div>
+                          <div className="font-semibold">₱{loan.principal.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Interest</div>
+                          <div className="font-semibold">₱{loan.interest.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Total Paid</div>
+                          <div className="font-semibold text-green-600">₱{totalPaid.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Remaining</div>
+                          <div className="font-semibold text-warning">₱{remainingBalance.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      {loan.releasedAt && (
+                        <div className="text-xs text-gray-500 mt-2">
+                          Released: {new Date(loan.releasedAt).toLocaleDateString()}
+                          {loan.settledAt && ` • Settled: ${new Date(loan.settledAt).toLocaleDateString()}`}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="card">
             <h3 className="font-semibold mb-2">Dividend Payouts</h3>

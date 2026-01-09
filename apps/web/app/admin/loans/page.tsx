@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -107,6 +106,7 @@ export default function LoansPage() {
     try {
       setLoading(true);
       setError('');
+      const API_BASE = getApiBaseUrl();
       let url = `${API_BASE}/api/admin/loans?page=${pg}&pageSize=${ps}`;
       if (status) {
         url += `&status=${encodeURIComponent(status)}`;
@@ -170,6 +170,7 @@ export default function LoansPage() {
 
     try {
       setSubmittingPayment(true);
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/loans/${selectedLoan.id}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -393,6 +394,7 @@ export default function LoansPage() {
                           className="rounded bg-green-600 px-3 py-1 text-white hover:bg-green-700 text-xs"
                           onClick={async () => {
                             try {
+                              const API_BASE = getApiBaseUrl();
                               const res = await fetch(`${API_BASE}/api/admin/loans/${loan.id}/status`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },

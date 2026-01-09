@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -21,6 +20,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchDashboard() {
       try {
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(`${API_BASE}/api/admin/dashboard`, {
           headers: getAuthHeaders(),
           cache: 'no-store',

@@ -16,6 +16,55 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 *
 // Protect all admin routes
 router.use(requireAdmin);
 
+// Helper: Generate all payment due dates for a given year
+function getPaymentDueDatesForYear(year: number): Array<{ year: number; month: number; day: number; date: Date }> {
+  const dueDates: Array<{ year: number; month: number; day: number; date: Date }> = [];
+  
+  for (let month = 0; month < 12; month++) {
+    // 15th of each month
+    dueDates.push({
+      year,
+      month: month + 1,
+      day: 15,
+      date: new Date(year, month, 15, 23, 59, 59, 999),
+    });
+    
+    // Last day of each month
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    dueDates.push({
+      year,
+      month: month + 1,
+      day: lastDay,
+      date: new Date(year, month, lastDay, 23, 59, 59, 999),
+    });
+  }
+  
+  return dueDates;
+}
+
+// Helper: Get payment due date key (YYYY-MM-DD)
+function getPaymentDueDateKey(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Helper: Determine which payment due date a contribution belongs to
+function getPaymentDueDateForContribution(
+  contributionDate: Date,
+  allDueDates: Array<{ year: number; month: number; day: number; date: Date }>
+): { year: number; month: number; day: number } | null {
+  const contribYear = contributionDate.getFullYear();
+  const contribMonth = contributionDate.getMonth() + 1;
+  const contribDay = contributionDate.getDate();
+  
+  // Find the first due date on or after this contribution
+  const futureDates = allDueDates.filter(d => 
+    d.date.getTime() >= contributionDate.getTime()
+  );
+  
+  if (futureDates.length === 0) return null;
+  return futureDates[0];
+}
+
 // List users for admin table with payment status
 router.get('/users', async (req, res) => {
   const now = new Date();
@@ -48,8 +97,18 @@ router.get('/users', async (req, res) => {
             lte: dueDate,
           },
         },
-        orderBy: { date_paid: 'desc' },
-        take: 1,
+        orderBy: { date_paid: 'asc' },
+      },
+      loans: {
+        where: { status: { not: 'PAID' } },
+        select: {
+          id: true,
+          principal: true,
+          interest: true,
+          dueDate: true,
+          status: true,
+          payments: { select: { amount: true } },
+        },
       },
     },
   });
@@ -75,18 +134,42 @@ router.get('/users', async (req, res) => {
   });
   
   const usersWithStatus = users.map((u: any) => {
-    const latestContribution = u.contributions[0];
-    let status = 'NO_PAYMENT';
-    
-    if (latestContribution) {
-      const expectedAmount = u.share_count * (config?.share_value || 0);
-      if (latestContribution.status === 'FULL' && latestContribution.amount >= expectedAmount) {
-        status = 'ON_TIME';
-      } else {
-        status = 'LATE';
-      }
+    const expectedAmount = u.share_count * (config?.share_value || 0);
+
+    const totalPaidCurrentDue = (u.contributions || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
+    let contribution_status: 'ON_TIME' | 'PARTIAL' | 'LATE' | 'NO_PAYMENT' = 'NO_PAYMENT';
+    if (totalPaidCurrentDue >= expectedAmount && expectedAmount > 0) {
+      contribution_status = 'ON_TIME';
+    } else if (totalPaidCurrentDue > 0) {
+      contribution_status = 'PARTIAL';
     } else if (now > dueDate) {
-      status = 'LATE';
+      contribution_status = 'LATE';
+    }
+
+    const activeLoans = u.loans || [];
+    let loan_payment_status: 'ON_TIME' | 'PARTIAL' | 'LATE' | 'NO_LOAN' = 'NO_LOAN';
+    if (activeLoans.length > 0) {
+      let hasLate = false;
+      let hasPartial = false;
+
+      activeLoans.forEach((loan: any) => {
+        const totalDue = (loan.principal || 0) + (loan.interest || 0);
+        const totalPaid = (loan.payments || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        const remaining = totalDue - totalPaid;
+        const isPastDue = loan.dueDate ? new Date(loan.dueDate) < now : false;
+
+        if (remaining > 0) {
+          if (isPastDue && totalPaid === 0) {
+            hasLate = true;
+          } else {
+            hasPartial = true;
+          }
+        }
+      });
+
+      if (hasLate) loan_payment_status = 'LATE';
+      else if (hasPartial) loan_payment_status = 'PARTIAL';
+      else loan_payment_status = 'ON_TIME';
     }
     
     return {
@@ -96,7 +179,8 @@ router.get('/users', async (req, res) => {
       phone_number: u.phone_number,
       role: u.role,
       share_count: u.share_count,
-      payment_status: status,
+      contribution_status,
+      loan_payment_status,
       hasLoan: loanMap.has(u.id),
       isCoMaker: coMakerMap.has(u.id),
     };
@@ -212,6 +296,23 @@ router.get('/users/:id', async (req, res) => {
       },
       loans: {
         orderBy: { createdAt: 'desc' },
+        where: { status: { not: 'PENDING' } },
+        include: {
+          payments: { orderBy: { createdAt: 'asc' } }
+        }
+      },
+      coMakerOnLoans: {
+        include: {
+          loan: {
+            include: {
+              user: { select: { id: true, full_name: true, email: true } },
+              payments: { orderBy: { createdAt: 'asc' } }
+            }
+          }
+        },
+        where: {
+          loan: { status: { not: 'PENDING' } }
+        }
       },
       cycleDividendStatus: {
         orderBy: [{ year: 'desc' }, { cycle: 'desc' }],
@@ -220,7 +321,112 @@ router.get('/users/:id', async (req, res) => {
   });
 
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+  
+  // Calculate payment due date status
+  const cfg = await getSystemConfigCached();
+  const expectedPerPayment = user.share_count * cfg.share_value;
+  
+  // Get all payment due dates for current and next year
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const allDueDates = [
+    ...getPaymentDueDatesForYear(currentYear),
+    ...getPaymentDueDatesForYear(currentYear + 1),
+  ];
+  
+  // Type for payment due date status
+  type PaymentDueStatus = {
+    year: number;
+    month: number;
+    day: number;
+    expectedAmount: number;
+    totalPaid: number;
+    status: 'PAID' | 'PARTIAL' | 'NO-PAYMENT';
+    remainingAmount: number;
+    contributionCount: number;
+  };
+  
+  const paymentDueMap = new Map<string, PaymentDueStatus>();
+  let carryoverAmount = 0; // Track advance payments
+  
+  // Initialize all due dates
+  allDueDates.forEach(({ year, month, day }) => {
+    const key = getPaymentDueDateKey(year, month, day);
+    paymentDueMap.set(key, {
+      year,
+      month,
+      day,
+      expectedAmount: expectedPerPayment,
+      totalPaid: carryoverAmount,
+      status: 'NO-PAYMENT',
+      remainingAmount: expectedPerPayment,
+      contributionCount: 0,
+    });
+  });
+  
+  // Sort contributions by date and apply them
+  const sortedContributions = [...user.contributions].sort(
+    (a, b) => new Date(a.date_paid).getTime() - new Date(b.date_paid).getTime()
+  );
+  
+  // Process contributions with carryover logic
+  for (const contrib of sortedContributions) {
+    const dueDate = getPaymentDueDateForContribution(new Date(contrib.date_paid), allDueDates);
+    if (!dueDate) continue;
+    
+    const key = getPaymentDueDateKey(dueDate.year, dueDate.month, dueDate.day);
+    const payment = paymentDueMap.get(key);
+    if (!payment) continue;
+    
+    payment.totalPaid += contrib.amount;
+    payment.contributionCount += 1;
+    
+    // Recalculate status and carryover
+    if (payment.totalPaid >= payment.expectedAmount) {
+      payment.status = 'PAID';
+      payment.remainingAmount = 0;
+      carryoverAmount = payment.totalPaid - payment.expectedAmount;
+      
+      // Apply carryover to next due dates
+      const currentDueIndex = allDueDates.findIndex(d => 
+        getPaymentDueDateKey(d.year, d.month, d.day) === key
+      );
+      if (currentDueIndex >= 0 && carryoverAmount > 0) {
+        for (let i = currentDueIndex + 1; i < allDueDates.length && carryoverAmount > 0; i++) {
+          const nextDue = allDueDates[i];
+          const nextKey = getPaymentDueDateKey(nextDue.year, nextDue.month, nextDue.day);
+          const nextPayment = paymentDueMap.get(nextKey);
+          if (nextPayment) {
+            nextPayment.totalPaid += carryoverAmount;
+            if (nextPayment.totalPaid >= nextPayment.expectedAmount) {
+              nextPayment.status = 'PAID';
+              nextPayment.remainingAmount = 0;
+              carryoverAmount = nextPayment.totalPaid - nextPayment.expectedAmount;
+            } else {
+              nextPayment.status = 'PARTIAL';
+              nextPayment.remainingAmount = nextPayment.expectedAmount - nextPayment.totalPaid;
+              carryoverAmount = 0;
+            }
+          }
+        }
+      }
+    } else {
+      payment.status = 'PARTIAL';
+      payment.remainingAmount = payment.expectedAmount - payment.totalPaid;
+      carryoverAmount = 0;
+    }
+  }
+  
+  const paymentDueStatus = Array.from(paymentDueMap.values()).sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    return a.day - b.day;
+  });
+  
+  res.json({
+    ...user,
+    paymentDueStatus,
+  });
 });
 
 // Update user details
@@ -298,6 +504,19 @@ router.put('/cycles/:year/:cycle/users/:id/eligibility', async (req, res) => {
   await invalidateEstimatedDividendPerShare(year);
 
   res.json(record);
+});
+
+// Get pending loans for a user
+router.get('/users/:id/pending-loans', async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid user id' });
+
+  const loans = await prisma.loan.findMany({
+    where: { userId: id, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json(loans);
 });
 
 // Create contribution entry with validation
@@ -492,9 +711,34 @@ router.put('/loans/:id/status', async (req, res) => {
   res.json(updated);
 });
 
+// Reject loan application with reason
+const loanRejectBody = z.object({ reason: z.string().min(1, 'Rejection reason is required') });
+router.post('/loans/:id/reject', async (req, res) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid loan id' });
+  const parsed = loanRejectBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const loan = await prisma.loan.findUnique({ where: { id } });
+  if (!loan) return res.status(404).json({ error: 'Loan not found' });
+
+  if (loan.status !== 'PENDING') {
+    return res.status(400).json({ error: 'Only pending loans can be rejected' });
+  }
+
+  const updated = await prisma.loan.update({
+    where: { id },
+    data: { status: 'REJECTED', rejectionReason: parsed.data.reason }
+  });
+  res.json(updated);
+});
+
 // Record loan payment
 const loanPaymentBody = z.object({
   amount: z.number().int().positive(),
+  date_paid: z.string().datetime().or(z.date()).optional(),
+  payment_method: z.enum(['GCASH', 'INSTAPAY', 'BANK_TRANSFER', 'CASH']).optional(),
+  reference: z.string().optional(),
 });
 
 router.post('/loans/:id/payment', async (req, res) => {
@@ -522,7 +766,13 @@ router.post('/loans/:id/payment', async (req, res) => {
   
   // Create payment record
   await prisma.loanPayment.create({
-    data: { loanId: id, amount }
+    data: {
+      loanId: id,
+      amount,
+      date_paid: parsed.data.date_paid ? new Date(parsed.data.date_paid) : new Date(),
+      payment_method: parsed.data.payment_method || 'CASH',
+      reference: parsed.data.reference || '',
+    }
   });
 
   // Check if fully paid

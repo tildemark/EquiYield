@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import ContributionForm from '../../../components/ContributionForm';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 type User = { id: number; email: string; share_count: number; full_name: string };
 type SystemConfig = { min_shares: number; max_shares: number; share_value: number };
@@ -21,8 +22,6 @@ type Payment = {
   interest?: number;
   loanStatus?: string;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -48,6 +47,7 @@ export default function PaymentsPage() {
     setLoading(true);
     setError('');
     try {
+      const API_BASE = getApiBaseUrl();
       const [contributionsRes, loansRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/contributions`, { headers: getAuthHeaders(), cache: 'no-store' }),
         fetch(`${API_BASE}/api/admin/loans`, { headers: getAuthHeaders(), cache: 'no-store' }),
@@ -105,6 +105,7 @@ export default function PaymentsPage() {
 
   const fetchUnpaidLoans = async () => {
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/loans`, { headers: getAuthHeaders(), cache: 'no-store' });
       const loansData = await res.json();
       const loansList = Array.isArray(loansData) ? loansData : loansData.data || [];
@@ -130,6 +131,7 @@ export default function PaymentsPage() {
     setLoanPaymentError('');
     setLoanPaymentBusy(true);
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/loans/${selectedLoanId}/payment`, {
         method: 'POST',
         headers: { 

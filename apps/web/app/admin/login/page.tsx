@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -17,6 +16,7 @@ export default function AdminLoginPage() {
     setError('');
     setBusy(true);
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -43,6 +43,9 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-md">
+        <div className="flex justify-center mb-6">
+          <img src="/equiyield-logo.webp" alt="EquiYield" className="w-24 h-24" />
+        </div>
         <h1 className="text-3xl font-bold mb-6 text-center text-gray-900">Admin Login</h1>
         <form className="space-y-4" onSubmit={submit}>
           <div>

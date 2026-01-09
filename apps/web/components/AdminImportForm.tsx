@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +22,7 @@ export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
         return;
       }
 
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/users/import/template`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -53,6 +53,7 @@ export default function AdminImportForm({ onDone }: { onDone?: () => void }) {
     try {
       const form = new FormData();
       form.append('file', file);
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/users/import`, {
         method: 'POST',
         headers: getAuthHeaders(),

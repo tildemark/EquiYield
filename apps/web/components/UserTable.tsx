@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import MemberDetail from './MemberDetail';
+import { useRouter } from 'next/navigation';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 type User = {
   id: number;
@@ -10,12 +11,11 @@ type User = {
   phone_number: string;
   role: 'MEMBER' | 'ADMIN';
   share_count: number;
-  payment_status: 'ON_TIME' | 'LATE' | 'NO_PAYMENT';
+  contribution_status: 'ON_TIME' | 'PARTIAL' | 'LATE' | 'NO_PAYMENT';
+  loan_payment_status: 'ON_TIME' | 'PARTIAL' | 'LATE' | 'NO_LOAN';
   hasLoan: boolean;
   isCoMaker: boolean;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -37,12 +37,13 @@ export default function UserTable({ refreshToken, onIdsChange }: { refreshToken?
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const router = useRouter();
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/users?page=${page}&pageSize=${pageSize}`, {
         headers: getAuthHeaders(),
         cache: 'no-store',
@@ -70,10 +71,6 @@ export default function UserTable({ refreshToken, onIdsChange }: { refreshToken?
     load();
   }, [refreshToken, page, pageSize]);
 
-  if (selectedUserId) {
-    return <MemberDetail userId={selectedUserId} onBack={() => setSelectedUserId(null)} />;
-  }
-
   if (loading) return <div>Loading members…</div>;
   if (error) return <div className="text-red-400">{error}</div>;
 
@@ -100,26 +97,40 @@ export default function UserTable({ refreshToken, onIdsChange }: { refreshToken?
             <th>Email</th>
             <th>Phone</th>
             <th>Shares</th>
-            <th>Payment Status</th>
+            <th>Contribution Status</th>
+            <th>Loan Payment Status</th>
             <th>Loans</th>
           </tr>
         </thead>
         <tbody>
           {users.map((u) => {
-            const statusBadge = 
-              u.payment_status === 'ON_TIME' ? 'badge-success' :
-              u.payment_status === 'LATE' ? 'badge-danger' :
-              'badge-warning';
-            const statusText = 
-              u.payment_status === 'ON_TIME' ? 'On Time' :
-              u.payment_status === 'LATE' ? 'Late' :
+            const contribBadge = 
+              u.contribution_status === 'ON_TIME' ? 'badge-success' :
+              u.contribution_status === 'PARTIAL' ? 'badge-warning' :
+              u.contribution_status === 'LATE' ? 'badge-danger' :
+              'badge-neutral';
+            const contribText = 
+              u.contribution_status === 'ON_TIME' ? 'On Time' :
+              u.contribution_status === 'PARTIAL' ? 'Partial' :
+              u.contribution_status === 'LATE' ? 'Late' :
               'No Payment';
+
+            const loanBadge =
+              u.loan_payment_status === 'ON_TIME' ? 'badge-success' :
+              u.loan_payment_status === 'PARTIAL' ? 'badge-warning' :
+              u.loan_payment_status === 'LATE' ? 'badge-danger' :
+              'badge-neutral';
+            const loanText =
+              u.loan_payment_status === 'ON_TIME' ? 'On Time' :
+              u.loan_payment_status === 'PARTIAL' ? 'Partial' :
+              u.loan_payment_status === 'LATE' ? 'Late' :
+              'No Loan';
             
             return (
               <tr 
                 key={u.id} 
-                onClick={() => setSelectedUserId(u.id)}
-                className="cursor-pointer hover:bg-gray-700/50 transition-colors"
+                onClick={() => router.push(`/admin/members/${u.id}`)}
+                className="cursor-pointer transition-colors hover:bg-gray-700/50"
               >
                 <td>{u.id}</td>
                 <td>{u.full_name}</td>
@@ -127,7 +138,10 @@ export default function UserTable({ refreshToken, onIdsChange }: { refreshToken?
                 <td>{u.phone_number}</td>
                 <td>{u.share_count}</td>
                 <td>
-                  <span className={`badge ${statusBadge}`}>{statusText}</span>
+                  <span className={`badge ${contribBadge}`}>{contribText}</span>
+                </td>
+                <td>
+                  <span className={`badge ${loanBadge}`}>{loanText}</span>
                 </td>
                 <td className="space-x-1">
                   {u.hasLoan && <span className="badge badge-primary">Has Loan</span>}

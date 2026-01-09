@@ -110,6 +110,7 @@ model Loan {
   monthlyAmortization Int          // PHP (monthly payment amount)
   dueDate            DateTime
   status             String        @default("PENDING")
+  rejectionReason    String?       // Reason for loan rejection (if status = REJECTED)
   releasedAt         DateTime?     // Date when loan was released/approved
   settledAt          DateTime?     // Date when loan was fully paid
   payments           LoanPayment[]
@@ -119,11 +120,14 @@ model Loan {
 }
 
 model LoanPayment {
-  id        Int      @id @default(autoincrement())
-  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  loanId    Int
-  amount    Int      // PHP
-  createdAt DateTime @default(now())
+  id             Int           @id @default(autoincrement())
+  loan           Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId         Int
+  amount         Int           // PHP
+  date_paid      DateTime      @default(now())
+  payment_method PaymentMethod @default(CASH)
+  reference      String        @default("")
+  createdAt      DateTime      @default(now())
 
   @@index([loanId])
 }

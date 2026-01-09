@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { getApiBaseUrl } from '@/lib/api-config';
 
-type Config = {
+type SystemConfig = {
   min_shares: number;
   max_shares: number;
   share_value: number;
   min_loan_amount: number;
   max_loan_amount: number;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('eq_admin_token');
@@ -28,6 +27,7 @@ export default function SystemConfigForm() {
 
   useEffect(() => {
     async function load() {
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/system-config`, {
         headers: getAuthHeaders(),
         cache: 'no-store',
@@ -47,6 +47,7 @@ export default function SystemConfigForm() {
     e.preventDefault();
     setStatus('Saving...');
 
+    const API_BASE = getApiBaseUrl();
     const res = await fetch(`${API_BASE}/api/admin/system-config`, {
       method: 'PUT',
       headers: {
