@@ -2,14 +2,20 @@ FROM node:18
 
 WORKDIR /app
 
-COPY apps/web/package*.json ./
+# Copy root workspace files
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+
+# Install all workspace dependencies from root
 RUN npm install
 
-COPY apps/web/ ./
+# Copy web source
+COPY apps/web/ ./apps/web/
 
+# Build from workspace
+WORKDIR /app/apps/web
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-
 RUN npm run build
 
 EXPOSE 3000
