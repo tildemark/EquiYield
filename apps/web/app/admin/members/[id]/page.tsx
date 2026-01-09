@@ -14,7 +14,7 @@ export default function MemberPage() {
     <main className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Member Details</h2>
-        <Link href="/admin/users" className="btn btn-secondary text-sm">Back to Members</Link>
+        <Link href="/admin/members" className="btn btn-secondary text-sm">Back to Members</Link>
       </div>
       <MemberDetail userId={userId} onBack={() => router.back()} />
     </main>

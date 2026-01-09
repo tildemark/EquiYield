@@ -63,6 +63,7 @@ model User {
   cycleDividendStatus  CycleDividendEligibility[]
   payoutsReceived      DividendPayout[] @relation("PayoutsReceived")
   payoutsCreated       DividendPayout[] @relation("PayoutsCreated")
+  expensesCreated      Expense[]
   archiveRuns          ArchiveRun[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -150,6 +151,21 @@ model ProfitPool {
   updatedAt  DateTime @updatedAt
 
   @@unique([year])
+}
+
+model Expense {
+  id            Int      @id @default(autoincrement())
+  year          Int
+  amount        Int      // PHP
+  description   String
+  referenceType String   @default("NONE") // NONE, GCASH, RECEIPT, BANK_TRANSFER
+  reference     String   @default("")
+  createdBy     User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUserId Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([year])
 }
 
 // Cycle-based dividend eligibility (1 = due 15th, 2 = due 30th/last day)

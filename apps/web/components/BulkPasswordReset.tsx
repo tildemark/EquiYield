@@ -13,6 +13,7 @@ export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
+  const [excludeAdmins, setExcludeAdmins] = useState(true);
 
   const run = async () => {
     setBusy(true);
@@ -23,7 +24,7 @@ export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
       const res = await fetch(`${API_BASE}/api/admin/users/bulk-passwords`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ userIds, sendEmail }),
+        body: JSON.stringify({ userIds, sendEmail, excludeAdmins }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Bulk reset failed');
@@ -39,10 +40,16 @@ export default function BulkPasswordReset({ userIds }: { userIds: number[] }) {
     <div className="card space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Bulk Password Reset</h3>
-        <label className="text-sm flex items-center gap-2">
-          <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          Email passwords to members
-        </label>
+        <div className="flex gap-4">
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={excludeAdmins} onChange={(e) => setExcludeAdmins(e.target.checked)} />
+            Exclude admin accounts
+          </label>
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
+            Email passwords to members
+          </label>
+        </div>
       </div>
       <button className="btn btn-primary" onClick={run} disabled={busy || userIds.length === 0}>
         {busy ? 'Running…' : `Reset for ${userIds.length} member(s)`}

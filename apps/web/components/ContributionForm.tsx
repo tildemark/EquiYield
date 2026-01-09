@@ -17,7 +17,7 @@ export default function ContributionForm({ onSuccess }: { onSuccess?: () => void
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [userId, setUserId] = useState<number | ''>('');
   const [amount, setAmount] = useState<string>('');
-  const [datePaid, setDatePaid] = useState<string>('');
+  const [datePaid, setDatePaid] = useState<string>(new Date().toISOString().split('T')[0]);
   const [method, setMethod] = useState<'GCASH'|'INSTAPAY'|'BANK_TRANSFER'|'CASH'>('GCASH');
   const [ref, setRef] = useState<string>('');
   const [status, setStatus] = useState<string>('');
@@ -72,7 +72,7 @@ export default function ContributionForm({ onSuccess }: { onSuccess?: () => void
       // Reset form
       setUserId('');
       setAmount('');
-      setDatePaid('');
+      setDatePaid(new Date().toISOString().split('T')[0]);
       setMethod('GCASH');
       setRef('');
       // Call success callback to refresh payment list

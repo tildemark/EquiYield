@@ -210,9 +210,20 @@ router.get('/me', async (req, res) => {
     return a.day - b.day;
   });
   
+  // Enrich co-maker loans with additional data
+  const enrichedCoMakerLoans = user.coMakerOnLoans?.map(coMakerEntry => ({
+    ...coMakerEntry,
+    loan: {
+      ...coMakerEntry.loan,
+      borrowerName: coMakerEntry.loan.user?.full_name || coMakerEntry.loan.borrowerName,
+      borrowerEmail: coMakerEntry.loan.user?.email || coMakerEntry.loan.borrowerEmail,
+    }
+  }));
+  
   res.json({
     ...user,
     loans: enrichedLoans,
+    coMakerOnLoans: enrichedCoMakerLoans,
     totalContributions,
     paymentDueStatus,
   });

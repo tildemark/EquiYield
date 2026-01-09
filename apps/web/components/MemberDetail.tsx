@@ -136,19 +136,6 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutError, setPayoutError] = useState('');
 
-  // Create payout form state
-  const [pyYear, setPyYear] = useState<number>(new Date().getFullYear());
-  const [pyPerShare, setPyPerShare] = useState<string>('');
-  const [pyShares, setPyShares] = useState<string>('');
-  const [pyAmount, setPyAmount] = useState<number>(0);
-  const [pyChannel, setPyChannel] = useState<'GCASH' | 'BANK'>('GCASH');
-  const [pyBankName, setPyBankName] = useState('');
-  const [pyBankAcc, setPyBankAcc] = useState('');
-  const [pyGcash, setPyGcash] = useState('');
-  const [pyRef, setPyRef] = useState('');
-  const [pyDate, setPyDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [pyBusy, setPyBusy] = useState(false);
-
   // Contribution recording modal state
   const [showContributionModal, setShowContributionModal] = useState(false);
   const [contribDate, setContribDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -162,6 +149,8 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
   const [showContribSection, setShowContribSection] = useState(true);
   const [showLoansSection, setShowLoansSection] = useState(true);
   const [showPendingLoansSection, setShowPendingLoansSection] = useState(true);
+  const [showTransactionsSection, setShowTransactionsSection] = useState(false);
+  const [collapsedLoanIds, setCollapsedLoanIds] = useState<Set<number>>(new Set());
 
   // Loan payment modal state
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
@@ -180,6 +169,13 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
   const [rejectionBusy, setRejectionBusy] = useState(false);
   const [rejectionError, setRejectionError] = useState('');
 
+  // Create loan modal state
+  const [showCreateLoanModal, setShowCreateLoanModal] = useState(false);
+  const [createLoanPrincipal, setCreateLoanPrincipal] = useState<string>('');
+  const [createLoanTermMonths, setCreateLoanTermMonths] = useState<string>('12');
+  const [createLoanBusy, setCreateLoanBusy] = useState(false);
+  const [createLoanError, setCreateLoanError] = useState('');
+
   // Pending loans state
   const [pendingLoans, setPendingLoans] = useState<any[]>([]);
   const [pendingLoansLoading, setPendingLoansLoading] = useState(false);
@@ -195,6 +191,18 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
       newExpanded.add(key);
     }
     setExpandedPaymentRows(newExpanded);
+  };
+
+  const toggleLoanCollapsed = (loanId: number) => {
+    setCollapsedLoanIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(loanId)) {
+        next.delete(loanId);
+      } else {
+        next.add(loanId);
+      }
+      return next;
+    });
   };
 
   async function load() {
@@ -842,7 +850,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                   return (
                     <React.Fragment key={key}>
                       <tr 
-                        className={`${isFuture ? 'opacity-50' : ''} cursor-pointer hover:bg-gray-700 transition-colors`}
+                        className={`${isFuture ? 'opacity-50' : ''} cursor-pointer hover:bg-blue-100/50 transition-colors`}
                         onClick={() => {
                           togglePaymentRowExpanded(key);
                         }}
@@ -880,7 +888,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr className="bg-gray-800/50">
+                        <tr className="bg-gradient-to-br from-blue-50 to-blue-100">
                           <td colSpan={6} className="p-0">
                             <div className="p-4">
                               <h4 className="font-semibold mb-3 text-sm">Contribution Details ({group.contributionCount})</h4>
@@ -982,6 +990,12 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-semibold">Loans</h3>
           <div className="flex items-center gap-2">
+            <button className="btn btn-success text-sm" onClick={() => {
+              setCreateLoanError('');
+              setCreateLoanPrincipal('');
+              setCreateLoanTermMonths('12');
+              setShowCreateLoanModal(true);
+            }}>+ Create Loan</button>
             <button className="btn btn-primary text-sm" onClick={() => {
               setLoanPaymentError('');
               const firstLoanId = user?.loans[0]?.id ?? null;
@@ -1067,6 +1081,8 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                 return { key: `${s.year}-${s.month}-${s.day}`, s, totalPaid, remainingAmount, status, isPast, isLate, payments: allocByIndex[i] };
               });
 
+              const isLoanCollapsed = collapsedLoanIds.has(loan.id);
+
               return (
                 <div key={loan.id} className="border rounded p-4">
                   <div className="flex items-center justify-between">
@@ -1074,9 +1090,15 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                       <h4 className="font-semibold">{loanTitle}</h4>
                       <div className="text-xs text-gray-400">Principal ₱{loan.principal.toLocaleString()} • Interest ₱{loan.interest.toLocaleString()} • Status {loan.status}</div>
                     </div>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => toggleLoanCollapsed(loan.id)}
+                    >
+                      {isLoanCollapsed ? 'Expand' : 'Collapse'}
+                    </button>
                   </div>
 
-                  {rows.length === 0 ? (
+                  {isLoanCollapsed ? null : rows.length === 0 ? (
                     <p className="text-gray-400 mt-3">No amortization schedule available</p>
                   ) : (
                     <div className="mt-4 overflow-x-auto">
@@ -1095,7 +1117,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                           {rows.map((row) => (
                             <React.Fragment key={row.key}>
                               <tr 
-                                className={`${!row.isPast ? 'opacity-50' : ''} cursor-pointer hover:bg-gray-700 transition-colors`}
+                                className={`${!row.isPast ? 'opacity-50' : ''} cursor-pointer hover:bg-green-100/50 transition-colors`}
                                 onClick={() => row.payments.length > 0 && togglePaymentRowExpanded(row.key)}
                               >
                                 <td className="font-medium">{new Date(row.s.date).toLocaleDateString()}</td>
@@ -1119,7 +1141,7 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                                 </td>
                               </tr>
                               {row.payments.length > 0 && expandedPaymentRows.has(row.key) && (
-                                <tr className="bg-gray-800/50">
+                                <tr className="bg-gradient-to-br from-green-50 to-green-100">
                                   <td colSpan={6} className="p-0">
                                     <div className="p-4">
                                       <h5 className="font-semibold mb-3 text-sm">Payments Applied ({row.payments.length})</h5>
@@ -1171,8 +1193,11 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
       {/* Co-Maker Loans */}
       {user.coMakerOnLoans && user.coMakerOnLoans.length > 0 && (
         <div className="card">
-          <h3 className="text-xl font-semibold mb-4">Co-Maker on Loans (View Only)</h3>
-          <p className="text-sm text-gray-400 mb-4">You are a co-maker on the following loans:</p>
+          <h3 className="text-xl font-semibold mb-4">Co-Maker on Loans</h3>
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 mb-4">
+            <p className="text-sm text-orange-800 font-semibold">⚠️ Co-Maker Responsibility</p>
+            <p className="text-xs text-orange-700 mt-1">As a co-maker, this member is responsible for loan payments if the borrower defaults. Monitor payment status regularly.</p>
+          </div>
           <div className="space-y-6">
             {user.coMakerOnLoans.map((coMakerEntry: any) => {
               const loan = coMakerEntry.loan;
@@ -1189,6 +1214,29 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
               const monthlyAmortization = loan.monthlyAmortization || 0;
               const termMonths = loan.termMonths || 0;
               const releasedDate = loan.releasedAt ? new Date(loan.releasedAt) : null;
+              
+              // Calculate overdue status
+              let overdueAmount = 0;
+              let overdueMonths = 0;
+              let isDefaulted = false;
+              
+              if (releasedDate && termMonths > 0 && monthlyAmortization > 0) {
+                let allocatedPayment = totalPaid;
+                for (let i = 0; i < termMonths; i++) {
+                  const dueDate = new Date(releasedDate.getFullYear(), releasedDate.getMonth() + i + 1, releasedDate.getDate());
+                  const isPast = dueDate < new Date();
+                  
+                  if (allocatedPayment >= monthlyAmortization) {
+                    allocatedPayment -= monthlyAmortization;
+                  } else if (isPast) {
+                    overdueAmount += (monthlyAmortization - allocatedPayment);
+                    overdueMonths++;
+                    allocatedPayment = 0;
+                  }
+                }
+                // Consider defaulted if 2+ months overdue
+                isDefaulted = overdueMonths >= 2;
+              }
               
               // Generate monthly amortization schedule
               const amortizations: Array<{
@@ -1263,35 +1311,81 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
               }
               
               return (
-                <div key={coMakerEntry.id} className="border border-gray-700 rounded-lg p-4">
+                <div key={coMakerEntry.id} className={`border rounded-lg p-4 ${
+                  isDefaulted ? 'border-red-500 bg-red-50' : overdueAmount > 0 ? 'border-yellow-500 bg-yellow-50' : 'border-gray-700'
+                }`}>
+                  {isDefaulted && (
+                    <div className="mb-3 rounded-lg border border-red-300 bg-red-100 p-2">
+                      <p className="text-sm text-red-800 font-bold">🚨 LOAN DEFAULTED</p>
+                      <p className="text-xs text-red-700 mt-1">Borrower is {overdueMonths} months behind. Co-maker may be contacted to settle this loan.</p>
+                    </div>
+                  )}
+                  {!isDefaulted && overdueAmount > 0 && (
+                    <div className="mb-3 rounded-lg border border-yellow-300 bg-yellow-100 p-2">
+                      <p className="text-sm text-yellow-800 font-semibold">⚠️ Payment Overdue</p>
+                      <p className="text-xs text-yellow-700 mt-1">{overdueMonths} month(s) overdue. Total overdue: ₱{overdueAmount.toLocaleString()}. Borrower should be followed up.</p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h4 className="font-semibold text-lg">{loanTitle}</h4>
                       <p className="text-sm text-gray-400">Borrower: {borrower?.email || loan.borrowerEmail}</p>
                     </div>
                     <div className="text-right">
-                      <div className={`badge ${isPaid ? 'badge-success' : 'badge-warning'}`}>
-                        {loan.status}
+                      <div className={`badge ${
+                        isPaid ? 'badge-success' : 
+                        isDefaulted ? 'badge-error' : 
+                        overdueAmount > 0 ? 'badge-warning' : 
+                        'badge-primary'
+                      }`}>
+                        {isDefaulted ? 'DEFAULTED' : loan.status}
                       </div>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
-                      <p className="text-xs text-gray-400">Principal</p>
-                      <p className="font-semibold">₱{loan.principal.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400">Monthly Payment</p>
+                      <p className="font-semibold">₱{monthlyAmortization.toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400">Interest</p>
-                      <p className="font-semibold">₱{loan.interest.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400">Total Paid</p>
+                      <p className="font-semibold text-success">₱{totalPaid.toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400">Total Due</p>
-                      <p className="font-semibold">₱{totalDue.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Remaining</p>
+                      <p className="text-xs text-gray-400">Remaining Balance</p>
                       <p className="font-semibold text-warning">₱{remainingBalance.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Overdue Amount</p>
+                      <p className={`font-semibold ${overdueAmount > 0 ? 'text-error' : 'text-success'}`}>
+                        {overdueAmount > 0 ? `₱${overdueAmount.toLocaleString()}` : '₱0'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-4 text-xs">
+                    <div className="bg-base-200 rounded p-2 text-center">
+                      <div className="text-gray-400">Payment Status</div>
+                      <div className={`font-semibold mt-1 ${
+                        isDefaulted ? 'text-error' :
+                        overdueAmount > 0 ? 'text-warning' :
+                        'text-success'
+                      }`}>
+                        {isDefaulted ? 'DEFAULTED' : overdueAmount > 0 ? 'OVERDUE' : 'UP TO DATE'}
+                      </div>
+                    </div>
+                    <div className="bg-base-200 rounded p-2 text-center">
+                      <div className="text-gray-400">Overdue Months</div>
+                      <div className={`font-semibold mt-1 ${overdueMonths > 0 ? 'text-error' : 'text-success'}`}>
+                        {overdueMonths}
+                      </div>
+                    </div>
+                    <div className="bg-base-200 rounded p-2 text-center">
+                      <div className="text-gray-400">Term Progress</div>
+                      <div className="font-semibold mt-1">
+                        {termMonths > 0 ? `${Math.min(Math.floor(totalPaid / monthlyAmortization), termMonths)}/${termMonths}` : '—'}
+                      </div>
                     </div>
                   </div>
                   
@@ -1348,125 +1442,213 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
 
       {/* Dividend Payouts */}
       <div className="card">
-        <h3 className="text-xl font-semibold mb-4">Dividend Payouts</h3>
+        <h3 className="text-xl font-semibold mb-4">Dividend Payouts Issued</h3>
         {payoutLoading ? (
           <div className="text-sm text-gray-400">Loading payouts…</div>
         ) : payouts.length === 0 ? (
           <p className="text-gray-400">No payout records</p>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Year</th>
-                <th>Per Share</th>
-                <th>Shares</th>
-                <th>Amount</th>
-                <th>Channel</th>
-                <th>Destination</th>
-                <th>Deposited</th>
-                <th>Ref</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map(p => (
-                <tr key={p.id}>
-                  <td>{p.year}</td>
-                  <td>₱{p.perShare.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                  <td>{p.sharesCount}</td>
-                  <td>₱{p.amount.toLocaleString()}</td>
-                  <td>{p.channel}</td>
-                  <td className="text-xs text-gray-400">
-                    {p.channel === 'BANK' ? `${p.bankName || ''} ${p.bankAccountNumber || ''}` : (p.gcashNumber || '')}
-                  </td>
-                  <td>{new Date(p.depositedAt).toLocaleDateString()}</td>
-                  <td className="text-xs text-gray-400">{p.reference || ''}</td>
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Amount</th>
+                  <th>Disbursement Method</th>
+                  <th>No. of Shares</th>
+                  <th>Payout Per Share</th>
+                  <th>Deposited Date</th>
+                  <th>Reference</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {payouts.map(p => (
+                  <tr key={p.id}>
+                    <td className="font-semibold">{p.year}</td>
+                    <td className="font-semibold">₱{p.amount.toLocaleString()}</td>
+                    <td>
+                      <span className="badge badge-sm">{p.channel}</span>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {p.channel === 'BANK' ? `${p.bankName || ''} ${p.bankAccountNumber || ''}` : (p.gcashNumber || '')}
+                      </div>
+                    </td>
+                    <td>{p.sharesCount}</td>
+                    <td>₱{p.perShare.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td>{new Date(p.depositedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                    <td className="text-xs text-gray-400">{p.reference || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+      </div>
 
-        <div className="mt-6 border-t border-gray-700/50 pt-4">
-          <h4 className="font-semibold mb-2">Record Payout</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <label className="text-sm">Year
-              <input className="input mt-1" type="number" value={pyYear} onChange={(e) => setPyYear(Number(e.target.value))} />
-            </label>
-            <label className="text-sm">Per Share (PHP)
-              <input className="input mt-1" type="number" step="0.01" value={pyPerShare} onChange={(e) => { setPyPerShare(e.target.value); const ps = parseFloat(e.target.value || '0'); const sh = parseInt(pyShares || '0', 10) || 0; setPyAmount(Math.round(ps * sh)); }} />
-            </label>
-            <label className="text-sm">Shares
-              <input className="input mt-1" type="number" value={pyShares} onChange={(e) => { setPyShares(e.target.value); const sh = parseInt(e.target.value || '0', 10) || 0; const ps = parseFloat(pyPerShare || '0'); setPyAmount(Math.round(ps * sh)); }} />
-            </label>
-            <label className="text-sm">Amount (PHP)
-              <input className="input mt-1" type="number" value={pyAmount} onChange={(e) => setPyAmount(parseInt(e.target.value || '0', 10) || 0)} />
-            </label>
-            <div className="text-sm mt-6 flex items-center gap-4">
-              <label className="flex items-center gap-2"><input type="radio" name="channel" checked={pyChannel==='GCASH'} onChange={() => setPyChannel('GCASH')} />GCASH</label>
-              <label className="flex items-center gap-2"><input type="radio" name="channel" checked={pyChannel==='BANK'} onChange={() => setPyChannel('BANK')} />Bank</label>
-            </div>
-            {pyChannel === 'BANK' ? (
-              <>
-                <label className="text-sm">Bank Name
-                  <input className="input mt-1" value={pyBankName} onChange={(e) => setPyBankName(e.target.value)} placeholder={user.bankName || ''} />
-                </label>
-                <label className="text-sm">Bank Account No.
-                  <input className="input mt-1" value={pyBankAcc} onChange={(e) => setPyBankAcc(e.target.value)} placeholder={user.bankAccountNumber || ''} />
-                </label>
-              </>
-            ) : (
-              <label className="text-sm">GCash Number
-                <input className="input mt-1" value={pyGcash} onChange={(e) => setPyGcash(e.target.value)} placeholder={user.gcashNumber || ''} />
-              </label>
-            )}
-            <label className="text-sm">Deposit Date
-              <input className="input mt-1" type="date" value={pyDate} onChange={(e) => setPyDate(e.target.value)} />
-            </label>
-            <label className="text-sm col-span-2">Reference Number <span className="text-red-500">*</span>
-              <input className="input mt-1" value={pyRef} onChange={(e) => setPyRef(e.target.value)} placeholder="Transaction ID, receipt no., or transfer reference for traceability" required />
-            </label>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">Reference number is required to track payout source (receipt, transfer ID, transaction hash, etc.)</p>
-          <div className="mt-3">
-            <button className="btn btn-primary" disabled={pyBusy || !pyRef.trim()} onClick={async () => {
-              if (!pyRef.trim()) {
-                alert('Please enter a reference number for traceability');
-                return;
-              }
-              setPyBusy(true);
-              try {
-                const API_BASE = getApiBaseUrl();
-                const res = await fetch(`${API_BASE}/api/admin/dividends/payouts`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                  body: JSON.stringify({
-                    userId,
-                    year: pyYear,
-                    perShare: parseFloat(pyPerShare || '0'),
-                    sharesCount: parseInt(pyShares || '0', 10) || 0,
-                    amount: pyAmount,
-                    channel: pyChannel,
-                    bankName: pyChannel==='BANK' ? (pyBankName || user.bankName || '') : '',
-                    bankAccountNumber: pyChannel==='BANK' ? (pyBankAcc || user.bankAccountNumber || '') : '',
-                    gcashNumber: pyChannel==='GCASH' ? (pyGcash || user.gcashNumber || '') : '',
-                    reference: pyRef,
-                    depositedAt: new Date(pyDate).toISOString(),
-                  }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Failed to record payout');
-                // Refresh payout list
-                const list = await fetch(`${API_BASE}/api/admin/dividends/payouts?userId=${userId}`, { headers: getAuthHeaders() });
-                setPayouts(await list.json());
-                setPyRef('');
-              } catch (e: any) {
-                alert(e.message);
-              } finally {
-                setPyBusy(false);
-              }
-            }}>{pyBusy ? 'Saving…' : 'Save Payout'}</button>
-          </div>
+      {/* All Transactions (Ledger View) */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold">All Transactions</h3>
+          <button className="btn btn-secondary text-sm" onClick={() => setShowTransactionsSection((s) => !s)}>
+            {showTransactionsSection ? 'Collapse' : 'Expand'}
+          </button>
         </div>
+        {showTransactionsSection && (
+          <div className="overflow-x-auto">
+            {(() => {
+              type Transaction = {
+                date: Date;
+                dateStr: string;
+                type: 'CONTRIBUTION' | 'LOAN_PAYMENT' | 'LOAN_DISBURSEMENT';
+                description: string;
+                debit: number;
+                credit: number;
+                balance: number;
+                reference?: string;
+                method?: string;
+              };
+
+              const transactions: Transaction[] = [];
+
+              // Add contributions
+              user.contributions.forEach(c => {
+                transactions.push({
+                  date: new Date(c.date_paid),
+                  dateStr: c.date_paid,
+                  type: 'CONTRIBUTION',
+                  description: 'Contribution Payment',
+                  debit: 0,
+                  credit: c.amount,
+                  balance: 0,
+                  reference: c.reference_number,
+                  method: c.method,
+                });
+              });
+
+              // Add loan payments from all loans
+              user.loans.forEach(loan => {
+                // Add loan disbursement
+                const loanDate = loan.releasedAt ? new Date(loan.releasedAt) : new Date(loan.createdAt);
+                transactions.push({
+                  date: loanDate,
+                  dateStr: loan.releasedAt || loan.createdAt,
+                  type: 'LOAN_DISBURSEMENT',
+                  description: `Loan #${loan.id} Disbursement`,
+                  debit: loan.principal,
+                  credit: 0,
+                  balance: 0,
+                  reference: `LOAN-${loan.id}`,
+                });
+
+                // Add all loan payments
+                (loan.payments || []).forEach(payment => {
+                  transactions.push({
+                    date: new Date(payment.createdAt),
+                    dateStr: payment.createdAt,
+                    type: 'LOAN_PAYMENT',
+                    description: `Loan #${loan.id} Payment`,
+                    debit: 0,
+                    credit: payment.amount,
+                    balance: 0,
+                    reference: `LOAN-${loan.id}`,
+                  });
+                });
+              });
+
+              // Sort by date (oldest first)
+              transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+              // Calculate running balance (contributions increase balance, loans decrease it, payments increase it)
+              let runningBalance = 0;
+              transactions.forEach(t => {
+                if (t.type === 'CONTRIBUTION' || t.type === 'LOAN_PAYMENT') {
+                  runningBalance += t.credit;
+                } else if (t.type === 'LOAN_DISBURSEMENT') {
+                  runningBalance -= t.debit;
+                }
+                t.balance = runningBalance;
+              });
+
+              if (transactions.length === 0) {
+                return <p className="text-gray-400">No transactions found</p>;
+              }
+
+              return (
+                <table className="table text-sm">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Method/Ref</th>
+                      <th className="text-right">Debit</th>
+                      <th className="text-right">Credit</th>
+                      <th className="text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((t, idx) => (
+                      <tr key={idx} className="hover:bg-gray-700/50">
+                        <td className="text-xs">
+                          {new Date(t.dateStr).toLocaleDateString('en-PH', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </td>
+                        <td>
+                          <span className={`badge badge-sm mr-2 ${
+                            t.type === 'CONTRIBUTION' ? 'badge-success' :
+                            t.type === 'LOAN_PAYMENT' ? 'badge-info' :
+                            'badge-warning'
+                          }`}>
+                            {t.type === 'CONTRIBUTION' ? 'CONTRIB' :
+                             t.type === 'LOAN_PAYMENT' ? 'PAYMENT' :
+                             'DISBURSEMENT'}
+                          </span>
+                          {t.description}
+                        </td>
+                        <td className="text-xs text-gray-400">
+                          {t.method && <div>{t.method}</div>}
+                          {t.reference && <div>{t.reference}</div>}
+                        </td>
+                        <td className="text-right font-mono">
+                          {t.debit > 0 ? (
+                            <span className="text-red-400">₱{t.debit.toLocaleString()}</span>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="text-right font-mono">
+                          {t.credit > 0 ? (
+                            <span className="text-green-400">₱{t.credit.toLocaleString()}</span>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="text-right font-mono font-semibold">
+                          ₱{t.balance.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-bold border-t-2">
+                      <td colSpan={3} className="text-right">Final Balance:</td>
+                      <td className="text-right font-mono text-red-400">
+                        ₱{transactions.reduce((sum, t) => sum + t.debit, 0).toLocaleString()}
+                      </td>
+                      <td className="text-right font-mono text-green-400">
+                        ₱{transactions.reduce((sum, t) => sum + t.credit, 0).toLocaleString()}
+                      </td>
+                      <td className="text-right font-mono">
+                        ₱{(transactions[transactions.length - 1]?.balance || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Cycle Eligibility History */}
@@ -1757,6 +1939,219 @@ export default function MemberDetail({ userId, onBack }: { userId: number; onBac
                   setContribReference('');
                 }}
                 disabled={contribBusy}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Loan Modal */}
+      {showCreateLoanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4">Create Loan for {user?.full_name}</h2>
+            
+            {createLoanError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {createLoanError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Principal Amount (PHP) *</label>
+                <input 
+                  type="number" 
+                  className="input w-full" 
+                  value={createLoanPrincipal}
+                  onChange={(e) => setCreateLoanPrincipal(e.target.value)}
+                  placeholder="0"
+                  step="100"
+                  min="0"
+                />
+              </div>
+
+              <div>
+                <label className="label">Term (Months) *</label>
+                <input 
+                  type="number" 
+                  className="input w-full" 
+                  value={createLoanTermMonths}
+                  onChange={(e) => setCreateLoanTermMonths(e.target.value)}
+                  placeholder="12"
+                  step="1"
+                  min="1"
+                />
+              </div>
+
+              <div>
+                <label className="label">Interest Rate</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    className="input flex-1" 
+                    value="5"
+                    disabled
+                    step="0.5"
+                    min="0"
+                  />
+                  <span className="text-sm text-gray-400">% (Fixed)</span>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 p-4 rounded text-sm space-y-3 border border-gray-700">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-400">Principal</div>
+                    <div className="font-mono text-base font-semibold">
+                      ₱{(parseFloat(createLoanPrincipal || '0') || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Interest Rate</div>
+                    <div className="font-mono text-base font-semibold">5%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Calculated Interest</div>
+                    <div className="font-mono text-base font-semibold">
+                      ₱{(() => {
+                        const principal = parseFloat(createLoanPrincipal || '0') || 0;
+                        return Math.round(principal * 0.05).toLocaleString();
+                      })()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Total Due</div>
+                    <div className="font-mono text-base font-semibold text-green-400">
+                      ₱{(() => {
+                        const principal = parseFloat(createLoanPrincipal || '0') || 0;
+                        const interest = Math.round(principal * 0.05);
+                        return (principal + interest).toLocaleString();
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="border-t border-gray-700 pt-3">
+                  <div className="text-xs text-gray-400 mb-2">Monthly Amortization</div>
+                  <div className="flex justify-between items-center">
+                    <div className="font-mono text-lg font-bold text-blue-400">
+                      ₱{(() => {
+                        const principal = parseFloat(createLoanPrincipal || '0') || 0;
+                        const interest = Math.round(principal * 0.05);
+                        const totalDue = principal + interest;
+                        const termMonths = parseInt(createLoanTermMonths || '12') || 12;
+                        return Math.round(totalDue / termMonths).toLocaleString();
+                      })()}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      per month for {createLoanTermMonths} months
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-700 pt-3">
+                  <div className="text-xs text-gray-400">Payment Schedule</div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <div className="text-xs text-gray-500">Term</div>
+                      <div className="font-mono">{createLoanTermMonths} months</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Est. Completion</div>
+                      <div className="font-mono text-xs">
+                        {(() => {
+                          const termMonths = parseInt(createLoanTermMonths || '12') || 12;
+                          const d = new Date();
+                          d.setMonth(d.getMonth() + termMonths);
+                          return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button 
+                className="btn btn-primary flex-1" 
+                onClick={async () => {
+                  if (!createLoanPrincipal || parseFloat(createLoanPrincipal) <= 0) {
+                    setCreateLoanError('Principal must be greater than 0');
+                    return;
+                  }
+                  if (!createLoanTermMonths || parseInt(createLoanTermMonths) <= 0) {
+                    setCreateLoanError('Term must be greater than 0');
+                    return;
+                  }
+
+                  // Validate member email exists and is valid
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (!user?.email || !emailRegex.test(user.email)) {
+                    setCreateLoanError(`Member email "${user?.email || 'unknown'}" is invalid. Please fix the member's email first.`);
+                    return;
+                  }
+
+                  setCreateLoanBusy(true);
+                  setCreateLoanError('');
+                  try {
+                    const principal = parseFloat(createLoanPrincipal);
+                    const termMonths = parseInt(createLoanTermMonths);
+                    const interestRate = 5; // Fixed 5%
+                    const interest = Math.round(principal * (interestRate / 100));
+                    const totalDue = principal + interest;
+                    const monthlyAmortization = Math.round(totalDue / termMonths);
+
+                    const API_BASE = getApiBaseUrl();
+                    const res = await fetch(`${API_BASE}/api/admin/loans`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders(),
+                      },
+                      body: JSON.stringify({
+                        userId,
+                        borrowerType: 'MEMBER',
+                        borrowerName: user?.full_name || '',
+                        borrowerEmail: user?.email || '',
+                        borrowerPhone: user?.phone_number || '',
+                        principal,
+                        interest,
+                        termMonths,
+                        interestRate,
+                        monthlyAmortization,
+                      }),
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Failed to create loan');
+                    
+                    setShowCreateLoanModal(false);
+                    setCreateLoanPrincipal('');
+                    setCreateLoanTermMonths('12');
+                    await load(); // Reload to get updated loans
+                  } catch (e: any) {
+                    setCreateLoanError(e.message);
+                  } finally {
+                    setCreateLoanBusy(false);
+                  }
+                }}
+                disabled={createLoanBusy}
+              >
+                {createLoanBusy ? 'Creating…' : 'Create Loan'}
+              </button>
+              <button 
+                className="btn btn-secondary flex-1"
+                onClick={() => {
+                  setShowCreateLoanModal(false);
+                  setCreateLoanError('');
+                  setCreateLoanPrincipal('');
+                  setCreateLoanTermMonths('12');
+                }}
+                disabled={createLoanBusy}
               >
                 Cancel
               </button>

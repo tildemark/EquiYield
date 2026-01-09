@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { getApiBaseUrl } from '@/lib/api-config';
 
@@ -20,6 +20,9 @@ interface LoanPayment {
   id: number;
   amount: number;
   createdAt: string;
+  payment_method?: string;
+  reference?: string;
+  date_paid?: string;
 }
 
 interface Amortization {
@@ -76,6 +79,7 @@ interface Loan {
   };
   coMakers: CoMaker[];
   createdAt: string;
+  payments?: LoanPayment[];
 }
 
 interface PaginatedResponse {
@@ -100,6 +104,9 @@ export default function LoansPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
   const fetchLoans = async (pg: number, ps: number, status?: string) => {
@@ -132,6 +139,7 @@ export default function LoansPage() {
   const fetchLoanDetail = async (loanId: number) => {
     try {
       setLoadingDetail(true);
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/admin/loans/${loanId}/details`, {
         headers: getAuthHeaders(),
         cache: 'no-store',
@@ -159,6 +167,34 @@ export default function LoansPage() {
     setPaymentAmount('');
   };
 
+  // Compute amortization rows with payment allocation for highlighting and payment date display
+  const amortizationWithStatus = useMemo(() => {
+    if (!selectedLoan) return [] as Array<Amortization & { paidAmount: number; status: 'PAID' | 'PARTIAL' | 'UNPAID'; paymentDate: string | null }>;
+
+    const payments = [...(selectedLoan.payments || [])]
+      .map((p) => ({ ...p, remaining: p.amount, payDate: (p as any).date_paid || p.createdAt }))
+      .sort((a, b) => new Date(a.payDate).getTime() - new Date(b.payDate).getTime());
+
+    return selectedLoan.amortization.map((am) => {
+      let paidAmount = 0;
+      let paymentDate: string | null = null;
+
+      for (const payment of payments) {
+        if (paidAmount >= am.amount) break;
+        if (payment.remaining <= 0) continue;
+        const apply = Math.min(payment.remaining, am.amount - paidAmount);
+        if (apply > 0) {
+          payment.remaining -= apply;
+          paidAmount += apply;
+          paymentDate = payment.payDate;
+        }
+      }
+
+      const status: 'PAID' | 'PARTIAL' | 'UNPAID' = paidAmount >= am.amount ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+      return { ...am, paidAmount, status, paymentDate };
+    });
+  }, [selectedLoan]);
+
   const handleRecordPayment = async () => {
     if (!selectedLoan || !paymentAmount) return;
     
@@ -174,14 +210,23 @@ export default function LoansPage() {
       const res = await fetch(`${API_BASE}/api/admin/loans/${selectedLoan.id}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ 
+          amount,
+          payment_method: paymentMethod,
+          reference: paymentReference,
+          date_paid: new Date(paymentDate).toISOString(),
+        }),
       });
       if (!res.ok) throw new Error('Failed to record payment');
       const result = await res.json();
       setActionMessage(result.message);
       setTimeout(() => setActionMessage(''), 3000);
       
-      // Refresh loan detail and main loans list
+      // Reset form and refresh
+      setPaymentAmount('');
+      setPaymentMethod('CASH');
+      setPaymentReference('');
+      setPaymentDate(new Date().toISOString().slice(0, 10));
       await fetchLoanDetail(selectedLoan.id);
       await fetchLoans(page, pageSize, statusFilter || undefined);
     } catch (err) {
@@ -320,15 +365,27 @@ export default function LoansPage() {
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Due Date</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Co-makers</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {loans.map((loan) => (
+                {loans.map((loan) => {
+                  const hasPayments = loan.payments && loan.payments.length > 0;
+                  const isEditable = !hasPayments && loan.status !== 'PAID';
+                  
+                  return (
                   <tr 
                     key={loan.id} 
-                    className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleOpenDetail(loan)}
+                    className={`border-b border-gray-200 hover:bg-gray-50 ${
+                      isEditable ? 'cursor-pointer' : 'cursor-default'
+                    }`}
+                    onClick={() => {
+                      if (isEditable) {
+                        window.location.href = `/admin/loans/create?edit=${loan.id}`;
+                      } else {
+                        handleOpenDetail(loan);
+                      }
+                    }}
+                    title={isEditable ? 'Click to edit loan' : 'Click to view details'}
                   >
                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">#{loan.id}</td>
                     <td className="px-6 py-4 text-sm">
@@ -387,37 +444,17 @@ export default function LoansPage() {
                       ) : (
                         <span className="text-gray-400">None</span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
-                      {loan.status === 'PENDING' ? (
-                        <button
-                          className="rounded bg-green-600 px-3 py-1 text-white hover:bg-green-700 text-xs"
-                          onClick={async () => {
-                            try {
-                              const API_BASE = getApiBaseUrl();
-                              const res = await fetch(`${API_BASE}/api/admin/loans/${loan.id}/status`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                                body: JSON.stringify({ status: 'RELEASED' }),
-                              });
-                              if (!res.ok) throw new Error('Failed to release');
-                              setActionMessage(`Loan #${loan.id} released successfully.`);
-                              fetchLoans(page, pageSize, statusFilter || undefined);
-                              setTimeout(() => setActionMessage(''), 3000);
-                            } catch (e) {
-                              console.error(e);
-                              alert('Failed to release loan');
-                            }
-                          }}
-                        >
-                          Release
-                        </button>
-                      ) : (
-                        <span className="text-gray-400">—</span>
+                      {isEditable && (
+                        <div className="mt-1">
+                          <span className="inline-block px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">
+                            ✏️ Editable
+                          </span>
+                        </div>
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -504,69 +541,64 @@ export default function LoansPage() {
                     </div>
                   </div>
 
-                  {/* Loan Details */}
-                  <div className="grid grid-cols-3 gap-4 mb-6 pb-6 border-b border-gray-200">
-                    <div>
-                      <div className="text-sm text-gray-600">Principal</div>
-                      <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.principal)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Interest</div>
-                      <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.interest)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Total Due</div>
-                      <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.totalDue)}</div>
-                    </div>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-gray-200">
-                    <div>
-                      <div className="text-sm text-gray-600">Created</div>
-                      <div className="font-semibold text-gray-900">{formatDate(selectedLoan.createdAt)}</div>
-                    </div>
-                    {selectedLoan.releasedAt && (
-                      <div>
-                        <div className="text-sm text-gray-600">Released</div>
-                        <div className="font-semibold text-gray-900">{formatDate(selectedLoan.releasedAt)}</div>
+                  {/* Loan Snapshot */}
+                  <div className="mb-6 pb-6 border-b border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Loan Snapshot</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Principal</div>
+                        <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.principal)}</div>
                       </div>
-                    )}
-                    <div>
-                      <div className="text-sm text-gray-600">Due Date</div>
-                      <div className="font-semibold text-gray-900">{formatDate(selectedLoan.dueDate)}</div>
-                    </div>
-                    {selectedLoan.settledAt && (
-                      <div>
-                        <div className="text-sm text-gray-600">Settled</div>
-                        <div className="font-semibold text-gray-900">{formatDate(selectedLoan.settledAt)}</div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Interest</div>
+                        <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.interest)}</div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Status and Payment Info */}
-                  <div className="grid grid-cols-3 gap-4 mb-6 pb-6 border-b border-gray-200">
-                    <div>
-                      <div className="text-sm text-gray-600">Status</div>
-                      <div>
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                          selectedLoan.status === 'PENDING'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : selectedLoan.status === 'PAID'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {selectedLoan.status}
-                        </span>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Total Due</div>
+                        <div className="text-xl font-bold text-gray-900">{formatCurrency(selectedLoan.totalDue)}</div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Total Paid</div>
-                      <div className="text-xl font-bold text-green-600">{formatCurrency(selectedLoan.totalPaid)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Balance</div>
-                      <div className="text-xl font-bold text-red-600">{formatCurrency(selectedLoan.balance)}</div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Created</div>
+                        <div className="font-semibold text-gray-900">{formatDate(selectedLoan.createdAt)}</div>
+                      </div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Due Date</div>
+                        <div className="font-semibold text-gray-900">{formatDate(selectedLoan.dueDate)}</div>
+                      </div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Status</div>
+                        <div>
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                            selectedLoan.status === 'PENDING'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : selectedLoan.status === 'PAID'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {selectedLoan.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Total Paid</div>
+                        <div className="text-xl font-bold text-green-600">{formatCurrency(selectedLoan.totalPaid)}</div>
+                      </div>
+                      <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs text-gray-500">Balance</div>
+                        <div className="text-xl font-bold text-red-600">{formatCurrency(selectedLoan.balance)}</div>
+                      </div>
+                      {selectedLoan.releasedAt && (
+                        <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                          <div className="text-xs text-gray-500">Released</div>
+                          <div className="font-semibold text-gray-900">{formatDate(selectedLoan.releasedAt)}</div>
+                        </div>
+                      )}
+                      {selectedLoan.settledAt && (
+                        <div className="p-3 rounded border border-gray-200 bg-gray-50">
+                          <div className="text-xs text-gray-500">Settled</div>
+                          <div className="font-semibold text-gray-900">{formatDate(selectedLoan.settledAt)}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -597,16 +629,37 @@ export default function LoansPage() {
                             <th className="px-4 py-2 text-left text-gray-600">Month</th>
                             <th className="px-4 py-2 text-right text-gray-600">Amount Due</th>
                             <th className="px-4 py-2 text-left text-gray-600">Due Date</th>
+                            <th className="px-4 py-2 text-left text-gray-600">Payment Date</th>
+                            <th className="px-4 py-2 text-left text-gray-600">Status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedLoan.amortization.map((month) => (
-                            <tr key={month.month} className="border-b border-gray-100">
-                              <td className="px-4 py-2 text-gray-900">{month.month}</td>
-                              <td className="px-4 py-2 text-right font-semibold text-gray-900">{formatCurrency(month.amount)}</td>
-                              <td className="px-4 py-2 text-gray-700">{month.dueDate}</td>
-                            </tr>
-                          ))}
+                          {amortizationWithStatus.map((month) => {
+                            const rowClass = month.status === 'PAID'
+                              ? 'bg-green-50'
+                              : month.status === 'PARTIAL'
+                                ? 'bg-yellow-50'
+                                : '';
+                            return (
+                              <tr key={month.month} className={`border-b border-gray-100 ${rowClass}`}>
+                                <td className="px-4 py-2 text-gray-900">{month.month}</td>
+                                <td className="px-4 py-2 text-right font-semibold text-gray-900">{formatCurrency(month.amount)}</td>
+                                <td className="px-4 py-2 text-gray-700">{month.dueDate}</td>
+                                <td className="px-4 py-2 text-gray-700">{month.paymentDate ? formatDate(month.paymentDate) : '—'}</td>
+                                <td className="px-4 py-2">
+                                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                    month.status === 'PAID'
+                                      ? 'bg-green-100 text-green-800'
+                                      : month.status === 'PARTIAL'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {month.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -616,20 +669,59 @@ export default function LoansPage() {
                   {selectedLoan.status !== 'PAID' && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                       <h3 className="text-sm font-semibold text-gray-900 mb-4">Record Payment</h3>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          placeholder="Amount"
-                          value={paymentAmount}
-                          onChange={(e) => setPaymentAmount(e.target.value)}
-                          className="input flex-1"
-                        />
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Amount *</label>
+                            <input
+                              type="number"
+                              placeholder="0"
+                              value={paymentAmount}
+                              onChange={(e) => setPaymentAmount(e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              step="100"
+                              min="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Date Paid *</label>
+                            <input
+                              type="date"
+                              value={paymentDate}
+                              onChange={(e) => setPaymentDate(e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Payment Method *</label>
+                            <select
+                              value={paymentMethod}
+                              onChange={(e) => setPaymentMethod(e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="CASH">Cash</option>
+                              <option value="BANK_TRANSFER">Bank Transfer</option>
+                              <option value="GCASH">GCash</option>
+                              <option value="INSTAPAY">Instapay</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number (optional)</label>
+                          <input
+                            type="text"
+                            placeholder="Transaction ID, receipt number, etc."
+                            value={paymentReference}
+                            onChange={(e) => setPaymentReference(e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </div>
                         <button
                           onClick={handleRecordPayment}
                           disabled={submittingPayment || !paymentAmount}
-                          className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {submittingPayment ? 'Recording...' : 'Record'}
+                          {submittingPayment ? 'Recording...' : 'Record Payment'}
                         </button>
                       </div>
                     </div>

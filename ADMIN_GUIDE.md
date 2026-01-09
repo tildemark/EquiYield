@@ -2,9 +2,11 @@
 
 ## Quick Start
 
-1. **Access the Admin Panel**: Navigate to http://localhost:3000/admin/users
+1. **Access the Admin Panel**: Navigate to http://localhost:3000/admin/members
+2. **Login with the bootstrap admin**: Use the credentials from `apps/server/create-admin.ts`, then **change the password immediately** via the admin login/change-password flow.
+3. **Update the bootstrap script password**: Before committing or sharing, edit `apps/server/create-admin.ts` to use a new strong password.
 
-2. **Configure System Settings**: 
+4. **Configure System Settings**: 
    - Go to http://localhost:3000/admin/config
    - Set your coop's share configuration:
      - **Min Shares**: Minimum number of shares a member must have (e.g., 1)
@@ -18,7 +20,7 @@
 
 ### Add a New Member
 
-1. Go to http://localhost:3000/admin/users
+1. Go to http://localhost:3000/admin/members
 2. Fill in the "Create New Member" form:
    - **Email**: Member's email address (unique identifier)
    - **Role**: Select MEMBER or ADMIN

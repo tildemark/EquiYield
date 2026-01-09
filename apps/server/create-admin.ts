@@ -2,6 +2,7 @@ import { prisma } from './src/prisma.js';
 import { hashPassword } from './src/services/auth.js';
 
 async function createAdmin() {
+  // IMPORTANT: Change this password before committing or deploying.
   const email = 'admin@equiyield.local';
   const password = 'Admin@123456';
   const fullName = 'Administrator';
@@ -31,6 +32,7 @@ async function createAdmin() {
     console.log('Email:    ' + email);
     console.log('Password: ' + password);
     console.log('Login at: http://localhost:3000/admin/login\n');
+    console.log('⚠️  Change this admin password immediately after first login.');
   } catch (error) {
     console.error('Error creating admin:', error);
   } finally {

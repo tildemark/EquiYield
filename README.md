@@ -2,6 +2,8 @@
 
 Cooperative savings and loan application scaffold (Express + Prisma + Redis + Next.js + Tailwind).
 
+Versioning follows **major.minor.patch** (MM.mm.xx) — current release: **v1.0.0**. See CHANGELOG for updates.
+
 ## Structure
 
 - apps/server: Express API, Prisma ORM, Redis cache
@@ -47,6 +49,8 @@ cd ../..
 
 ```bash
 npm run dev
+
+**Important security note:** The bootstrap admin user created by `apps/server/create-admin.ts` ships with a default password. Change it immediately after first login and rotate the script’s password before committing or sharing the repository.
 ```
 
 ## Docker Management

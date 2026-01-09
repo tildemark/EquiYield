@@ -35,8 +35,11 @@ export default function PaymentsPage() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   
-  // Loan payment form state
+  // Form visibility state
+  const [showContributionForm, setShowContributionForm] = useState(false);
   const [showLoanPaymentForm, setShowLoanPaymentForm] = useState(false);
+  
+  // Loan payment form state
   const [loanPaymentBusy, setLoanPaymentBusy] = useState(false);
   const [loanPaymentError, setLoanPaymentError] = useState('');
   const [unpaidLoans, setUnpaidLoans] = useState<any[]>([]);
@@ -124,6 +127,7 @@ export default function PaymentsPage() {
 
   const handleContributionAdded = () => {
     setRefreshToken(prev => prev + 1);
+    setShowContributionForm(false);
   };
 
   const handleLoanPaymentSubmit = async (e: React.FormEvent) => {
@@ -147,6 +151,7 @@ export default function PaymentsPage() {
       setSelectedLoanId('');
       setShowLoanPaymentForm(false);
       setRefreshToken(prev => prev + 1);
+      await fetchUnpaidLoans();
     } catch (e: any) {
       setLoanPaymentError(e.message);
     } finally {
@@ -172,22 +177,72 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Payments Management</h1>
-        <p className="text-gray-600">Record member contributions, loan payments, and view all payment history</p>
+      {/* Header Section */}
+      <div className="border-b border-gray-200 pb-4">
+        <h1 className="text-3xl font-bold mb-2 text-gray-900">Payments Management</h1>
+        <p className="text-gray-600">Record contributions, process loan payments, and view comprehensive payment history</p>
       </div>
 
-      {/* Contribution Form */}
+      {/* Quick Actions Grid */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Record Member Contribution</h2>
-        <ContributionForm onSuccess={handleContributionAdded} />
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+          <button
+            onClick={() => setShowContributionForm(!showContributionForm)}
+            className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors group"
+          >
+            <span className="text-3xl group-hover:scale-110 transition-transform">💰</span>
+            <div className="text-left">
+              <div className="font-semibold text-gray-900">Record Contribution</div>
+              <div className="text-sm text-gray-600">Add a member contribution</div>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => setShowLoanPaymentForm(!showLoanPaymentForm)}
+            className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors group"
+          >
+            <span className="text-3xl group-hover:scale-110 transition-transform">📤</span>
+            <div className="text-left">
+              <div className="font-semibold text-gray-900">Record Loan Payment</div>
+              <div className="text-sm text-gray-600">Process a loan payment</div>
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* Loan Payment Form */}
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Record Loan Payment</h2>
-        
-        {showLoanPaymentForm ? (
+      {/* Contribution Form Card */}
+      {showContributionForm && (
+        <div className="card relative">
+          <button
+            onClick={() => setShowContributionForm(false)}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Record Member Contribution</h2>
+          <ContributionForm onSuccess={handleContributionAdded} />
+        </div>
+      )}
+
+      {/* Loan Payment Form Card */}
+      {showLoanPaymentForm && (
+        <div className="card relative">
+          <button
+            onClick={() => {
+              setShowLoanPaymentForm(false);
+              setAmountPaid('');
+              setSelectedLoanId('');
+              setLoanPaymentError('');
+            }}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Record Loan Payment</h2>
+          
           <form className="space-y-4" onSubmit={handleLoanPaymentSubmit}>
             {loanPaymentError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -243,12 +298,8 @@ export default function PaymentsPage() {
               </button>
             </div>
           </form>
-        ) : (
-          <button className="btn btn-primary" onClick={() => setShowLoanPaymentForm(true)}>
-            + Add Loan Payment
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Payment Detail Modal */}
       {selectedPayment && (

@@ -1,4 +1,4 @@
-// File: E:\code\EquiYield\apps\web\app\admin\loans\page.tsx
+// File: C:\code\EquiYield\apps\web\app\admin\loans\page.tsx
 import * as entry from '../../../../../app/admin/loans/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

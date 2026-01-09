@@ -18,6 +18,8 @@ interface Member {
 }
 
 export default function CreateLoanPage() {
+  const [editMode, setEditMode] = useState(false);
+  const [loanId, setLoanId] = useState<number | null>(null);
   const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,14 @@ export default function CreateLoanPage() {
 
   // Fetch members on mount
   useEffect(() => {
+    // Check if editing
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get('edit');
+    if (editId) {
+      setEditMode(true);
+      setLoanId(parseInt(editId));
+    }
+
     const fetchMembers = async () => {
       try {
         const API_BASE = getApiBaseUrl();
@@ -85,6 +95,36 @@ export default function CreateLoanPage() {
 
     fetchMembers();
     fetchAvailableFunds();
+
+    // Fetch loan details if editing
+    if (editId) {
+      const fetchLoanDetails = async () => {
+        try {
+          const API_BASE = getApiBaseUrl();
+          const res = await fetch(`${API_BASE}/api/admin/loans/${editId}/details`, {
+            headers: getAuthHeaders(),
+            cache: 'no-store',
+          });
+          if (!res.ok) throw new Error('Failed to fetch loan');
+          const loan = await res.json();
+          
+          // Populate form with loan data
+          setBorrowerType(loan.borrowerType);
+          if (loan.user) {
+            setSelectedMemberId(loan.user.id.toString());
+          }
+          setBorrowerName(loan.borrowerName);
+          setBorrowerEmail(loan.borrowerEmail);
+          setBorrowerPhone(loan.borrowerPhone);
+          setPrincipal(loan.principal.toString());
+          setTermMonths(loan.termMonths.toString());
+          setCoMakers(loan.coMakers.map((cm: any) => cm.user.id.toString()));
+        } catch (err) {
+          setError('Failed to load loan details: ' + (err as Error).message);
+        }
+      };
+      fetchLoanDetails();
+    }
   }, []);
 
   // Calculate loan details
@@ -157,8 +197,11 @@ export default function CreateLoanPage() {
       };
 
       const API_BASE = getApiBaseUrl();
-      const res = await fetch(`${API_BASE}/api/admin/loans`, {
-        method: 'POST',
+      const url = editMode ? `${API_BASE}/api/admin/loans/${loanId}` : `${API_BASE}/api/admin/loans`;
+      const method = editMode ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
@@ -169,10 +212,10 @@ export default function CreateLoanPage() {
       if (!res.ok) {
         const data = await res.json();
         const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-        throw new Error(errorMsg || 'Failed to create loan');
+        throw new Error(errorMsg || (editMode ? 'Failed to update loan' : 'Failed to create loan'));
       }
 
-      setSuccess('Loan created successfully!');
+      setSuccess(editMode ? 'Loan updated successfully!' : 'Loan created successfully!');
       setTimeout(() => {
         router.push('/admin/loans');
       }, 1500);
@@ -200,7 +243,7 @@ export default function CreateLoanPage() {
         <Link href="/admin/loans" className="text-blue-600 hover:underline">
           ← Back to Loans
         </Link>
-        <h1 className="mt-2 text-3xl font-bold text-gray-900">Create Loan</h1>
+        <h1 className="mt-2 text-3xl font-bold text-gray-900">{editMode ? 'Edit Loan' : 'Create Loan'}</h1>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

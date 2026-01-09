@@ -205,43 +205,50 @@ router.get('/dashboard', async (_req, res) => {
   const dueDay = cycle === 1 ? 15 : Math.min(30, lastDay);
   const dueDate = new Date(year, month, dueDay, 23, 59, 59, 999);
 
-  const [config, users, totalMembers, contribAgg, loanAgg, loanCount, profitPool] = await Promise.all([
+  const [config, users, contribAgg, loanAgg, loanCount, loanInterestAgg, loanPaymentAgg, expenseAgg] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { id: 1 } }),
     prisma.user.findMany({
+      where: {
+        OR: [
+          { role: 'MEMBER' },
+          { role: 'ADMIN', share_count: { gt: 0 } },
+        ],
+      },
       select: {
         id: true,
+        role: true,
         share_count: true,
         contributions: {
           where: {
             date_paid: {
-              gte: new Date(year, month, 1),
               lte: dueDate,
             },
           },
           orderBy: { date_paid: 'desc' },
-          take: 1,
         },
       },
     }),
-    prisma.user.count(),
     prisma.contribution.aggregate({ _sum: { amount: true } }),
     prisma.loan.aggregate({ _sum: { principal: true } }),
     prisma.loan.count(),
-    prisma.profitPool.findUnique({ where: { year } }),
+    prisma.loan.aggregate({ _sum: { interest: true } }),
+    prisma.loanPayment.aggregate({ _sum: { amount: true } }),
+    prisma.expense.aggregate({ 
+      where: { year },
+      _sum: { amount: true } 
+    }),
   ]);
 
+  const totalMembers = users.length;
   let onTime = 0;
   let delayed = 0;
 
   users.forEach((u: any) => {
-    const latest = u.contributions[0];
     const expected = u.share_count * (config?.share_value || 0);
-    if (latest) {
-      if (latest.status === 'FULL' && latest.amount >= expected) {
-        onTime += 1;
-      } else {
-        delayed += 1;
-      }
+    const totalPaid = u.contributions.reduce((sum: number, c: any) => sum + c.amount, 0);
+    
+    if (totalPaid >= expected) {
+      onTime += 1;
     } else if (now > dueDate) {
       delayed += 1;
     }
@@ -249,17 +256,51 @@ router.get('/dashboard', async (_req, res) => {
 
   const totalCollections = contribAgg._sum.amount ?? 0;
   const totalLoanAmount = loanAgg._sum.principal ?? 0;
-  const availableForLoans = Math.max(totalCollections - totalLoanAmount, 0);
+  const totalLoanPayments = loanPaymentAgg._sum.amount ?? 0;
+  const currentYearProfitPool = loanInterestAgg._sum.interest ?? 0;
+  const totalExpenses = expenseAgg._sum.amount ?? 0;
+  const netProfit = currentYearProfitPool - totalExpenses;
+  const availableForLoans = Math.max(totalCollections + totalLoanPayments - totalLoanAmount, 0);
+
+  // Calculate total active shares for dividend estimate
+  const sharesAgg = await prisma.user.aggregate({
+    where: {
+      OR: [
+        { role: 'MEMBER' },
+        { role: 'ADMIN', share_count: { gt: 0 } },
+      ],
+    },
+    _sum: { share_count: true },
+  });
+
+  const activeShares = sharesAgg._sum.share_count ?? 0;
+  const estimatedDividendPerShare = activeShares > 0 ? currentYearProfitPool / activeShares : 0;
+
+  // Count members eligible for dividend (have shares)
+  const membersEligibleForDividend = await prisma.user.count({
+    where: {
+      OR: [
+        { role: 'MEMBER' },
+        { role: 'ADMIN', share_count: { gt: 0 } },
+      ],
+    },
+  });
 
   res.json({
     totalMembers,
     totalCollections,
+    totalLoanPayments,
     onTimeMembers: onTime,
     delayedMembers: delayed,
     loanAvailments: loanCount,
     totalLoanAmount,
     availableForLoans,
-    currentYearProfitPool: profitPool?.amount ?? 0,
+    currentYearProfitPool,
+    totalExpenses,
+    netProfit,
+    estimatedDividendPerShare: Math.round((netProfit / activeShares) * 100) / 100,
+    activeShares,
+    membersEligibleForDividend,
     cycle,
     dueDate,
   });
@@ -267,17 +308,20 @@ router.get('/dashboard', async (_req, res) => {
 
 // Available funds for loans (lightweight endpoint for form)
 router.get('/funds-available', async (_req, res) => {
-  const [contribAgg, loanAgg] = await Promise.all([
+  const [contribAgg, loanAgg, loanPaymentAgg] = await Promise.all([
     prisma.contribution.aggregate({ _sum: { amount: true } }),
     prisma.loan.aggregate({ _sum: { principal: true } }),
+    prisma.loanPayment.aggregate({ _sum: { amount: true } }),
   ]);
 
   const totalCollections = contribAgg._sum.amount ?? 0;
   const totalLoanAmount = loanAgg._sum.principal ?? 0;
-  const availableForLoans = Math.max(totalCollections - totalLoanAmount, 0);
+  const totalLoanPayments = loanPaymentAgg._sum.amount ?? 0;
+  const availableForLoans = Math.max(totalCollections + totalLoanPayments - totalLoanAmount, 0);
 
   res.json({
     totalCollections,
+    totalLoanPayments,
     totalLoanAmount,
     availableForLoans,
   });
@@ -598,6 +642,7 @@ router.get('/loans', async (req, res) => {
     include: {
       user: { select: { id: true, full_name: true, email: true } },
       coMakers: { include: { user: { select: { id: true, full_name: true } } } },
+      payments: { select: { id: true } },
     },
   });
 
@@ -823,6 +868,96 @@ router.get('/loans/:id/details', async (req, res) => {
       dueDate: dueDate.toISOString().split('T')[0],
     });
   }
+    router.put('/loans/:id', async (req, res) => {
+      const loanId = parseInt(req.params.id);
+      if (isNaN(loanId)) return res.status(400).json({ error: 'Invalid loan ID' });
+
+      // Check if loan exists and has no payments
+      const existingLoan = await prisma.loan.findUnique({
+        where: { id: loanId },
+        include: { payments: true },
+      });
+
+      if (!existingLoan) return res.status(404).json({ error: 'Loan not found' });
+      if (existingLoan.status === 'PAID') {
+        return res.status(400).json({ error: 'Cannot edit a paid loan' });
+      }
+      if (existingLoan.payments.length > 0) {
+        return res.status(400).json({ error: 'Cannot edit loan with existing payments' });
+      }
+
+      const parsed = loanBody.safeParse(req.body);
+      if (!parsed.success) {
+        const errors = parsed.error.flatten().fieldErrors;
+        const messages = Object.entries(errors).map(([field, msgs]) => `${field}: ${msgs?.join(', ')}`).join('; ');
+        return res.status(400).json({ error: messages || 'Invalid loan data' });
+      }
+
+      const {
+        borrowerType,
+        userId,
+        borrowerName,
+        borrowerEmail,
+        borrowerPhone,
+        principal,
+        termMonths,
+        coMakers = [],
+      } = parsed.data;
+
+      if (borrowerType === 'MEMBER' && !userId) {
+        return res.status(400).json({ error: 'userId is required for member loans' });
+      }
+
+      let member: { id: number; full_name: string } | null = null;
+      if (borrowerType === 'MEMBER') {
+        member = await prisma.user.findUnique({ where: { id: userId } });
+        if (!member) return res.status(404).json({ error: 'Member not found' });
+      }
+
+      const monthlyRateBps = borrowerType === 'MEMBER' ? 500 : 1000;
+      const now = new Date();
+  
+      const dueDate = new Date(now);
+      dueDate.setMonth(dueDate.getMonth() + termMonths);
+      dueDate.setHours(23, 59, 59, 999);
+
+      const monthlyRate = monthlyRateBps / 10000;
+      const interest = Math.round(principal * monthlyRate * termMonths);
+      const totalAmount = principal + interest;
+      const monthlyAmortization = Math.round(totalAmount / termMonths);
+
+      // Delete existing co-makers and recreate
+      await prisma.loanCoMaker.deleteMany({ where: { loanId } });
+
+      const loan = await prisma.loan.update({
+        where: { id: loanId },
+        data: {
+          borrowerType: borrowerType as any,
+          userId: member?.id ?? null,
+          borrowerName: borrowerName || member?.full_name || '',
+          borrowerEmail,
+          borrowerPhone,
+          principal,
+          interest,
+          monthlyRateBps,
+          termMonths,
+          monthlyAmortization,
+          dueDate,
+          coMakers: coMakers.length
+            ? {
+                createMany: {
+                  data: coMakers.map((uid) => ({ userId: uid })),
+                  skipDuplicates: true,
+                },
+              }
+            : undefined,
+        },
+        include: { coMakers: true },
+      });
+
+      res.json(loan);
+    });
+
   
   res.json({
     ...loan,
@@ -942,12 +1077,16 @@ router.post('/users/:id/reset-password', async (req, res) => {
 });
 
 // Bulk password generation
-const bulkPasswordBody = z.object({ userIds: z.array(z.number().int().positive()).nonempty(), sendEmail: z.boolean().optional() });
+const bulkPasswordBody = z.object({ userIds: z.array(z.number().int().positive()).nonempty(), sendEmail: z.boolean().optional(), excludeAdmins: z.boolean().optional() });
 router.post('/users/bulk-passwords', async (req, res) => {
   const parsed = bulkPasswordBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const users = await prisma.user.findMany({ where: { id: { in: parsed.data.userIds } } });
+  const whereClause: any = { id: { in: parsed.data.userIds } };
+  if (parsed.data.excludeAdmins) {
+    whereClause.role = { not: 'ADMIN' };
+  }
+  const users = await prisma.user.findMany({ where: whereClause });
   const results: Array<{ id: number; email: string; password: string; emailed: boolean }> = [];
 
   for (const user of users) {
@@ -1253,6 +1392,83 @@ router.post('/dividends/payouts/bulk', async (req, res) => {
     res.json({ created, failed, summary: { total: eligibleMembers.length, created: created.length, failed: failed.length } });
   } catch (e: any) {
     res.status(500).json({ error: 'Failed to create bulk payouts', details: e.message });
+  }
+});
+
+// Get expenses for a year
+router.get('/expenses', async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const expenses = await prisma.expense.findMany({
+      where: { year },
+      include: { createdBy: { select: { id: true, full_name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(expenses);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to fetch expenses', details: e.message });
+  }
+});
+
+// Create expense
+router.post('/expenses', async (req, res) => {
+  try {
+    const { amount, description, referenceType, reference, year } = req.body;
+    const userId = (req as any).user?.id;
+
+    if (!amount || !description) {
+      return res.status(400).json({ error: 'Amount and description required' });
+    }
+
+    const expense = await prisma.expense.create({
+      data: {
+        year: year || new Date().getFullYear(),
+        amount: Number(amount),
+        description,
+        referenceType: referenceType || 'NONE',
+        reference: reference || '',
+        createdByUserId: userId,
+      },
+      include: { createdBy: { select: { id: true, full_name: true, email: true } } },
+    });
+
+    res.json(expense);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to create expense', details: e.message });
+  }
+});
+
+// Update expense
+router.put('/expenses/:id', async (req, res) => {
+  try {
+    const expenseId = Number(req.params.id);
+    const { amount, description, referenceType, reference } = req.body;
+
+    const expense = await prisma.expense.update({
+      where: { id: expenseId },
+      data: {
+        amount: amount !== undefined ? Number(amount) : undefined,
+        description: description || undefined,
+        referenceType: referenceType || undefined,
+        reference: reference || undefined,
+      },
+      include: { createdBy: { select: { id: true, full_name: true, email: true } } },
+    });
+
+    res.json(expense);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to update expense', details: e.message });
+  }
+});
+
+// Delete expense
+router.delete('/expenses/:id', async (req, res) => {
+  try {
+    const expenseId = Number(req.params.id);
+    await prisma.expense.delete({ where: { id: expenseId } });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to delete expense', details: e.message });
   }
 });
 

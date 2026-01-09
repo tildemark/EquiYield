@@ -399,6 +399,40 @@ This session successfully implemented a robust dividend payout distribution syst
 - ✓ Member visibility of all payout records and details
 - ✓ Compliance-ready audit logs for financial reconciliation
 
+---
+
+### SESSION 2 (January 9, 2026)
+
+#### 1. **Co-Maker Visibility & Payment Status**
+
+**Objective:** Give co-makers clear visibility into borrower payment health and obligations.
+
+**Changes Made:**
+- **Member Dashboard** ([apps/web/app/member/dashboard/page.tsx](apps/web/app/member/dashboard/page.tsx)): Added co-maker section with overdue/default warnings, monthly payment amount, overdue amount, next due date, and status badges (UP TO DATE / OVERDUE / DEFAULTED).
+- **Admin Member Detail** ([apps/web/components/MemberDetail.tsx](apps/web/components/MemberDetail.tsx)): Enhanced co-maker cards with overdue/default detection, amortization schedule, overdue months, and payment status badges.
+- **Backend Member Profile** ([apps/server/src/routes/member.ts](apps/server/src/routes/member.ts)): Ensured `coMakerOnLoans` is returned with borrower details for member dashboard consumption.
+
+#### 2. **Loan Edit Rules & UI**
+
+**Objective:** Allow editing only when no payments were made and loan is not PAID; otherwise view-only.
+
+**Changes Made:**
+- **Frontend** ([apps/web/app/admin/loans/page.tsx](apps/web/app/admin/loans/page.tsx)): Table rows become editable links only when there are zero payments and status is not PAID; removed Actions column; added “Editable” badge for eligible rows.
+- **Loan Create/Edit Page** ([apps/web/app/admin/loans/create/page.tsx](apps/web/app/admin/loans/create/page.tsx)): Added edit mode via `?edit={loanId}`; pre-fills form and submits PUT for updates.
+- **Backend** ([apps/server/src/routes/admin.ts](apps/server/src/routes/admin.ts)): Added `PUT /api/admin/loans/:id` to update loans only if unpaid and with no payments; loans list now includes payments to inform UI.
+
+#### 3. **Documentation & Security**
+
+**Changes Made:**
+- **README.md**: Added versioning note (MM.mm.xx), current release v1.0.0, and security reminder to change bootstrap admin password.
+- **ADMIN_GUIDE.md**: Quick start now instructs changing the bootstrap admin password immediately and rotating the script password before sharing.
+- **create-admin.ts**: In-file warning and post-create reminder to change the default password.
+- **CHANGELOG.md**: Added v1.0.0 entry summarizing initial release scope and co-maker/loan edit updates.
+
+#### 4. **Release Versioning**
+
+- Established semantic versioning format (major.minor.patch) with initial tag **v1.0.0**.
+
 All code is type-safe, error-handled, and documented for maintainability.
 
 ---
