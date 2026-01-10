@@ -98,160 +98,79 @@ async function seedDemoData() {
         email: 'carlos.lopez@demo.com',
         full_name: 'Carlos Lopez',
         phone_number: '09211234567',
-        share_count: 5,
+        share_count: 20,
         gcashNumber: '09211234567',
-        bankName: 'Security Bank',
+        bankName: 'PNB',
         bankAccountNumber: '7777888899',
       },
     ];
 
-    const createdMembers = [];
-    for (const member of members) {
-      const user = await prisma.user.create({
-        data: {
-          ...member,
-          passwordHash: memberPassword,
-          role: 'MEMBER',
-          is_dividend_eligible: true,
-        },
-      });
-      createdMembers.push(user);
-    }
+    const createdMembers = await Promise.all(
+      members.map(member =>
+        prisma.user.create({
+          data: {
+            ...member,
+            passwordHash: memberPassword,
+            role: 'MEMBER',
+          },
+        })
+      )
+    );
 
-    // Create contributions
+    // Create sample contributions
     console.log('💰 Creating sample contributions...');
     const now = new Date();
     for (const member of createdMembers) {
-      const expectedAmount = member.share_count * 250;
-      
-      // Current month - full payment
-      await prisma.contribution.create({
-        data: {
-          userId: member.id,
-          amount: expectedAmount,
-          date_paid: new Date(now.getFullYear(), now.getMonth(), 15),
-          status: 'FULL',
-          method: 'GCASH',
-          reference_number: `GC${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-        },
-      });
-
-      // Last month - partial for one member
-      if (member.email === 'carlos.lopez@demo.com') {
+      for (let i = 0; i < 2; i++) {
         await prisma.contribution.create({
           data: {
             userId: member.id,
-            amount: expectedAmount * 0.7,
-            date_paid: new Date(now.getFullYear(), now.getMonth() - 1, 28),
-            status: 'PARTIAL',
-            method: 'CASH',
-            reference_number: 'CASH-' + Date.now(),
-          },
-        });
-      } else {
-        await prisma.contribution.create({
-          data: {
-            userId: member.id,
-            amount: expectedAmount,
-            date_paid: new Date(now.getFullYear(), now.getMonth() - 1, 28),
+            amount: (member.share_count * 250 * (i + 1)) / 100,
+            date_paid: new Date(now.getFullYear(), now.getMonth() - 2 + i, 10),
             status: 'FULL',
-            method: Math.random() > 0.5 ? 'BANK_TRANSFER' : 'INSTAPAY',
-            reference_number: `BT${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+            method: 'BANK_TRANSFER',
+            reference_number: `CONTRIB-${member.id}-${i}`,
           },
         });
       }
     }
 
-    // Create loans
+    // Create sample loans
     console.log('🏦 Creating sample loans...');
-    
-    // Active loan with payments
-    const loan1 = await prisma.loan.create({
-      data: {
-        borrowerType: 'MEMBER',
-        userId: createdMembers[0].id,
-        borrowerName: createdMembers[0].full_name,
-        borrowerEmail: createdMembers[0].email,
-        borrowerPhone: createdMembers[0].phone_number,
-        principal: 10000,
-        interest: 2500,
-        monthlyRateBps: 500,
-        termMonths: 5,
-        monthlyAmortization: 2500,
-        dueDate: new Date(now.getFullYear(), now.getMonth() + 5, now.getDate()),
-        status: 'RELEASED',
-        releasedAt: new Date(now.getFullYear(), now.getMonth() - 2, 1),
-      },
-    });
-
-    // Add co-maker
-    await prisma.loanCoMaker.create({
-      data: {
-        loanId: loan1.id,
-        userId: createdMembers[1].id,
-      },
-    });
-
-    // Add payments
-    await prisma.loanPayment.create({
-      data: {
-        loanId: loan1.id,
-        amount: 2500,
-        payment_method: 'GCASH',
-        reference: 'GC-PAYMENT-001',
-        date_paid: new Date(now.getFullYear(), now.getMonth() - 1, 15),
-      },
-    });
-
-    // Pending loan
-    await prisma.loan.create({
-      data: {
-        borrowerType: 'MEMBER',
-        userId: createdMembers[2].id,
-        borrowerName: createdMembers[2].full_name,
-        borrowerEmail: createdMembers[2].email,
-        borrowerPhone: createdMembers[2].phone_number,
-        principal: 5000,
-        interest: 1250,
-        monthlyRateBps: 500,
-        termMonths: 5,
-        monthlyAmortization: 1250,
-        dueDate: new Date(now.getFullYear(), now.getMonth() + 5, now.getDate()),
-        status: 'PENDING',
-      },
-    });
-
-    // Paid loan
-    const loan3 = await prisma.loan.create({
-      data: {
-        borrowerType: 'MEMBER',
-        userId: createdMembers[3].id,
-        borrowerName: createdMembers[3].full_name,
-        borrowerEmail: createdMembers[3].email,
-        borrowerPhone: createdMembers[3].phone_number,
-        principal: 3000,
-        interest: 750,
-        monthlyRateBps: 500,
-        termMonths: 5,
-        monthlyAmortization: 750,
-        dueDate: new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()),
-        status: 'PAID',
-        releasedAt: new Date(now.getFullYear(), now.getMonth() - 6, 1),
-        settledAt: new Date(now.getFullYear(), now.getMonth() - 1, 15),
-      },
-    });
-
-    // Add full payments for paid loan
-    for (let i = 0; i < 5; i++) {
-      await prisma.loanPayment.create({
+    const loanStatuses = ['PENDING', 'RELEASED', 'PAID'] as const;
+    for (let i = 0; i < 3; i++) {
+      const member = createdMembers[i];
+      await prisma.loan.create({
         data: {
-          loanId: loan3.id,
-          amount: 750,
-          payment_method: 'BANK_TRANSFER',
-          reference: `BT-PMT-${i + 1}`,
-          date_paid: new Date(now.getFullYear(), now.getMonth() - 6 + i, 15),
+          userId: member.id,
+          principal_amount: 5000 * (i + 1),
+          interest_rate: 5 + i,
+          term_months: 12,
+          status: loanStatuses[i],
+          reason: `Sample loan #${i + 1}`,
+          requested_date: new Date(now.getFullYear(), now.getMonth() - 3, 1),
+          approved_date: i > 0 ? new Date(now.getFullYear(), now.getMonth() - 2, 15) : null,
+          disbursed_date: i > 0 ? new Date(now.getFullYear(), now.getMonth() - 2, 20) : null,
+          maturity_date: new Date(now.getFullYear() + 1, now.getMonth(), 20),
         },
       });
+    }
+
+    // Create sample payments
+    console.log('💳 Creating sample loan payments...');
+    for (let i = 0; i < 2; i++) {
+      const loan = await prisma.loan.findFirst({ where: { status: 'PAID' } });
+      if (loan) {
+        await prisma.loanPayment.create({
+          data: {
+            loan_id: loan.id,
+            amount: loan.principal_amount / 12,
+            payment_method: 'BANK_TRANSFER',
+            reference: `BT-PMT-${i + 1}`,
+            date_paid: new Date(now.getFullYear(), now.getMonth() - 6 + i, 15),
+          },
+        });
+      }
     }
 
     // Create dividend payouts
@@ -285,8 +204,8 @@ async function seedDemoData() {
     console.log(`   • Loans: 3 (1 active, 1 pending, 1 paid)`);
     console.log(`   • Dividend Payouts: 3`);
     console.log('\n🌐 Access the app:');
-    console.log('   • Admin: http://localhost:3000/admin/login');
-    console.log('   • Member: http://localhost:3000/member/login');
+    console.log('   • Admin: https://equiyield.sanchez.ph/admin/login');
+    console.log('   • Member: https://equiyield.sanchez.ph/member/login');
     console.log('\n⚠️  Remember to change the admin password after first login!\n');
 
   } catch (error) {
