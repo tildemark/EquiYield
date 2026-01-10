@@ -140,34 +140,44 @@ async function seedDemoData() {
     const loanStatuses = ['PENDING', 'RELEASED', 'PAID'] as const;
     for (let i = 0; i < 3; i++) {
       const member = createdMembers[i];
+      const principal = 5000 * (i + 1);
+      const monthlyRateBps = 500 + (i * 50); // 5%, 5.5%, 6%
+      const termMonths = 12;
+      const totalInterest = Math.floor((principal * monthlyRateBps * termMonths) / 10000);
+      const monthlyPayment = Math.floor((principal + totalInterest) / termMonths);
+      
       await prisma.loan.create({
         data: {
           userId: member.id,
-          principal_amount: 5000 * (i + 1),
-          interest_rate: 5 + i,
-          term_months: 12,
+          borrowerType: 'MEMBER',
+          borrowerName: member.full_name,
+          borrowerEmail: member.email,
+          borrowerPhone: member.phone_number,
+          principal,
+          monthlyRateBps,
+          termMonths,
+          interest: totalInterest,
+          monthlyAmortization: monthlyPayment,
           status: loanStatuses[i],
-          reason: `Sample loan #${i + 1}`,
-          requested_date: new Date(now.getFullYear(), now.getMonth() - 3, 1),
-          approved_date: i > 0 ? new Date(now.getFullYear(), now.getMonth() - 2, 15) : null,
-          disbursed_date: i > 0 ? new Date(now.getFullYear(), now.getMonth() - 2, 20) : null,
-          maturity_date: new Date(now.getFullYear() + 1, now.getMonth(), 20),
+          dueDate: new Date(now.getFullYear() + 1, now.getMonth(), 20),
+          releasedAt: i > 0 ? new Date(now.getFullYear(), now.getMonth() - 2, 15) : null,
+          settledAt: i === 2 ? new Date(now.getFullYear(), now.getMonth() - 1, 15) : null,
         },
       });
     }
 
     // Create sample payments
     console.log('💳 Creating sample loan payments...');
-    for (let i = 0; i < 2; i++) {
-      const loan = await prisma.loan.findFirst({ where: { status: 'PAID' } });
-      if (loan) {
+    const paidLoan = await prisma.loan.findFirst({ where: { status: 'PAID' } });
+    if (paidLoan) {
+      for (let i = 0; i < 2; i++) {
         await prisma.loanPayment.create({
           data: {
-            loan_id: loan.id,
-            amount: loan.principal_amount / 12,
+            loanId: paidLoan.id,
+            amount: Math.floor(paidLoan.monthlyAmortization),
+            date_paid: new Date(now.getFullYear(), now.getMonth() - 6 + i, 15),
             payment_method: 'BANK_TRANSFER',
             reference: `BT-PMT-${i + 1}`,
-            date_paid: new Date(now.getFullYear(), now.getMonth() - 6 + i, 15),
           },
         });
       }
@@ -181,17 +191,17 @@ async function seedDemoData() {
       await prisma.dividendPayout.create({
         data: {
           userId: member.id,
+          createdByUserId: admin?.id,
           year: currentYear - 1,
           amount: member.share_count * 150,
           perShare: 150,
-          shareCount: member.share_count,
+          sharesCount: member.share_count,
           channel: Math.random() > 0.5 ? 'GCASH' : 'BANK',
           reference: `DIV-${currentYear - 1}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           gcashNumber: member.gcashNumber,
           bankName: member.bankName,
           bankAccountNumber: member.bankAccountNumber,
           depositedAt: new Date(currentYear - 1, 11, 20),
-          createdByUserId: admin?.id,
         },
       });
     }
