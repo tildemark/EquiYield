@@ -271,35 +271,147 @@ sudo ufw reload
 
 ---
 
-## Step 5: Setup Auto-Reset for Demo Data
+## Step 5: Setup Auto-Reset for Demo Data (Optional)
 
-### 5.1 Make Reset Script Executable
+This step configures automatic daily reset of demo data, useful for maintaining a clean demo environment.
+
+### 5.1 Ensure Reset Script Exists
+
+The script is already in the repository at `scripts/reset-demo.sh`. After cloning, make it executable:
 
 ```bash
-chmod +x /opt/equiyield/scripts/reset-demo.sh
+cd /opt/EquiYield
+chmod +x scripts/reset-demo.sh
 ```
+
+**Script Location:** `/opt/EquiYield/scripts/reset-demo.sh`
+
+**What it does:**
+- Checks if Docker containers are running
+- Waits for PostgreSQL to be ready
+- Runs the seed script to reset demo data
+- Creates fresh admin user and 5 demo members
+- Populates sample contributions, loans, and dividends
 
 ### 5.2 Test Manual Reset
 
+Before setting up automation, test the script manually:
+
 ```bash
-/opt/equiyield/scripts/reset-demo.sh
+cd /opt/EquiYield
+./scripts/reset-demo.sh
 ```
 
-### 5.3 Setup Cron Job
+**Expected output:**
+```
+🔄 Starting daily demo data reset...
+Timestamp: Fri Jan 10 10:00:00 UTC 2026
+⏳ Waiting for database...
+✅ Database is ready
+🌱 Reseeding demo data...
+🌱 Seeding demo data...
+⚙️  Setting up system config...
+👤 Creating admin user...
+👥 Creating sample members...
+💰 Creating sample contributions...
+🏦 Creating sample loans...
+💳 Creating sample loan payments...
+💸 Creating sample dividend payouts...
+
+✅ Demo data seeded successfully!
+✨ Demo data reset complete!
+-----------------------------------
+```
+
+### 5.3 Setup Cron Job for Daily Reset
+
+Configure cron to run the reset automatically:
 
 ```bash
 # Edit crontab
 crontab -e
-
-# Add this line for daily reset at midnight
-0 0 * * * /opt/equiyield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
 ```
 
-### 5.4 Create Log File
+Add this line to run daily at midnight (server time):
 
 ```bash
+0 0 * * * /opt/EquiYield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
+```
+
+**Cron schedule explained:**
+- `0 0` - At 00:00 (midnight)
+- `* * *` - Every day, every month, any day of week
+- Output is logged to `/var/log/equiyield-reset.log`
+
+**Alternative schedules:**
+```bash
+# Every 6 hours
+0 */6 * * * /opt/EquiYield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
+
+# Every day at 3 AM
+0 3 * * * /opt/EquiYield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
+
+# Every Sunday at midnight
+0 0 * * 0 /opt/EquiYield/scripts/reset-demo.sh >> /var/log/equiyield-reset.log 2>&1
+```
+
+### 5.4 Create and Configure Log File
+
+```bash
+# Create log file with proper permissions
 sudo touch /var/log/equiyield-reset.log
 sudo chown $USER:$USER /var/log/equiyield-reset.log
+```
+
+### 5.5 Verify Cron Job
+
+```bash
+# List all cron jobs
+crontab -l
+
+# Check if cron service is running
+sudo systemctl status cron
+```
+
+### 5.6 Monitor Reset Logs
+
+```bash
+# View recent resets
+tail -f /var/log/equiyield-reset.log
+
+# Check last 50 lines
+tail -n 50 /var/log/equiyield-reset.log
+
+# Search for errors
+grep -i error /var/log/equiyield-reset.log
+```
+
+### 5.7 Setup Log Rotation (Optional)
+
+Prevent log file from growing too large:
+
+```bash
+sudo nano /etc/logrotate.d/equiyield
+```
+
+Add:
+```
+/var/log/equiyield-reset.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 ubuntu ubuntu
+}
+```
+
+This keeps 7 days of compressed logs.
+
+**Test log rotation:**
+```bash
+sudo logrotate -f /etc/logrotate.d/equiyield
 ```
 
 ---
