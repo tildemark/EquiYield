@@ -42,11 +42,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      # Note: Password with special chars like + / = must be URL-encoded (%2B %2F %3D)
-      # POSTGRES_PASSWORD=LgIkeeGhqOgwJ/Na1o5PTUjk6olTHIA3+PciOrR/7t0= becomes:
-      # LgIkeeGhqOgwJ%2FNa1o5PTUjk6olTHIA3%2BPciOrR%2F7t0%3D
-      DATABASE_URL: postgresql://postgres:LgIkeeGhqOgwJ%2FNa1o5PTUjk6olTHIA3%2BPciOrR%2F7t0%3D@postgres:5432/equiyield?schema=public
-      REDIS_URL: redis://:FR4wJQVf4jA647l7%2BxWZDBNS7A9Mk1NyM%2Bu1jpPXvBg%3D@redis:6379
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/equiyield?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       DEMO_MODE: ${DEMO_MODE:-false}
