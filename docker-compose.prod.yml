@@ -55,6 +55,7 @@ services:
       - redis
     networks:
       - equiyield-network
+      - net
     restart: unless-stopped
 
   web:
