@@ -42,7 +42,11 @@ async function seedDemoData() {
     const adminPassword = await hashPassword('Admin@123456');
     await prisma.user.upsert({
       where: { email: 'admin@equiyield.local' },
-      update: {},
+      update: {
+        passwordHash: adminPassword,
+        full_name: 'Administrator',
+        role: 'ADMIN',
+      },
       create: {
         email: 'admin@equiyield.local',
         full_name: 'Administrator',
