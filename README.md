@@ -1,8 +1,37 @@
 # EquiYield
 
-Cooperative savings and loan application scaffold (Express + Prisma + Redis + Next.js + Tailwind).
+**v1.0.0** - Production-ready cooperative savings and loan management system.
 
-Versioning follows **major.minor.patch** (MM.mm.xx) — current release: **v1.0.0**. See CHANGELOG for updates.
+Modern full-stack application for managing cooperative member contributions, loans, dividend distributions, and financial records.
+
+**Tech Stack:** Express.js + Prisma ORM + Redis + PostgreSQL + Next.js 15 + Tailwind CSS
+
+## 🌟 Features
+
+- ✅ **Member Management** - Profile management, share tracking, eligibility control
+- ✅ **Contribution Recording** - Multiple payment methods, audit trail, status tracking
+- ✅ **Loan Management** - Application workflow, approval process, payment tracking, co-maker support
+- ✅ **Dividend Distribution** - Bulk payouts, cycle-based eligibility, pro-rata calculation
+- ✅ **Transaction Ledger** - Complete member financial history
+- ✅ **Admin Dashboard** - Comprehensive control panel with filters and analytics
+- ✅ **Member Portal** - Self-service dashboard with loan application
+- ✅ **Expense Tracking** - Profit pool management with Redis caching
+- ✅ **Archive System** - Historical data management
+
+## 🚀 Live Demo
+
+**Production Deployment:** https://equiyield.sanchez.ph
+
+**Demo Credentials:**
+- **Admin:** `admin@equiyield.local` / `Admin@123456`
+- **Members:** All use password `Member@123`
+  - juan.delacruz@demo.com
+  - maria.santos@demo.com
+  - pedro.reyes@demo.com
+  - ana.garcia@demo.com
+  - carlos.lopez@demo.com
+
+
 
 ## Structure
 
@@ -178,6 +207,31 @@ Token is stored in `localStorage` as `eq_member_token` and used for authenticate
 	- `POST /api/admin/dividends/payouts/bulk` — Distribute to all eligible members with single parameters
 	- Response includes created count, failed count, and individual member results
 	- Automatically assigns reference and tracks creator for audit trail
+
+## 📋 Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+
+**Current Version:** v1.0.0 (January 10, 2026)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with descriptive commits
+4. Submit a pull request
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+## 🔗 Links
+
+- **Production:** https://equiyield.sanchez.ph
+- **GitHub:** https://github.com/tildemark/EquiYield
+- **Documentation:** See ADMIN_GUIDE.md for detailed setup instructions
+
+
 
 - **Reporting & Audit**:
 	- Payout records include **Created By** field showing which admin processed the payout

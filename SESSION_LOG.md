@@ -1,8 +1,9 @@
 # EquiYield Development Session Log
 
-**Session Dates:** January 8-9, 2026  
+**Session Dates:** January 8-10, 2026  
 **Project:** EquiYield - Cooperative Savings & Loan Management System  
-**Technology Stack:** Node.js + Express + Prisma + PostgreSQL + Redis + Next.js 15 + Tailwind CSS
+**Technology Stack:** Node.js + Express + Prisma + PostgreSQL + Redis + Next.js 15 + Tailwind CSS  
+**Version:** v1.0.0 (Production Ready)
 
 ---
 
@@ -828,6 +829,101 @@ The system now provides complete loan lifecycle tracking from application throug
 
 ---
 
-**Generated:** January 9, 2026  
-**Status:** Production ready, network accessible, fully branded  
-**Next Action:** Push to GitHub, deploy to production
+### SESSION 4 (January 10, 2026)
+
+#### Production Deployment to OCI Ampere
+
+**Objective:** Deploy v1.0.0 to production on Oracle Cloud Infrastructure (OCI) Always Free Tier ARM64 instance using Docker and Nginx Proxy Manager.
+
+**Deployment Environment:**
+- **Platform:** OCI Ampere A1 (ARM64 architecture)
+- **OS:** Ubuntu Server
+- **Reverse Proxy:** Nginx Proxy Manager with Let's Encrypt SSL
+- **Orchestration:** Docker + docker-compose.prod.yml
+- **Domain:** https://equiyield.sanchez.ph
+
+**Challenges Resolved:**
+
+1. **Docker Build Issues:**
+   - Initial Alpine Linux images missing build tools for Prisma native modules
+   - Switched from `node:18-alpine` to `node:18` (Debian-based) standard images
+   - Simplified Dockerfiles from multi-stage to single-stage builds (10-16 lines)
+   - Removed health checks causing container restart loops
+
+2. **Database Connectivity:**
+   - Special characters in passwords (`+`, `/`, `=`) breaking Prisma URL parsing (P1013 errors)
+   - Solution: Generated hex passwords using `openssl rand -hex 32`
+   - Deleted and recreated postgres_data volume to apply new credentials
+
+3. **Network Configuration:**
+   - HTTP 525 SSL handshake errors when accessing through Nginx Proxy Manager
+   - Root cause: Containers not connected to NPM's external "net" network
+   - Solution: Added both `server` and `web` services to "net" network in docker-compose.prod.yml
+   - Added explicit port exposure: `4000:4000` and `3000:3000`
+
+4. **API Routing:**
+   - Next.js frontend receiving HTML instead of JSON from API calls
+   - Double `/api/api` paths in requests
+   - Root cause: `NEXT_PUBLIC_API_BASE_URL` set to `https://equiyield.sanchez.ph/api`
+   - Solution: Changed to `https://equiyield.sanchez.ph` (frontend appends `/api` automatically)
+
+5. **Nginx Proxy Manager Configuration:**
+   - DNS cache showing "host not found in upstream equiyield-server"
+   - Solution: Deleted and recreated proxy host to force DNS refresh
+   - Added custom location `/api` → `equiyield-server:4000`
+
+**Production Configuration:**
+
+- **docker-compose.prod.yml:**
+  ```yaml
+  services:
+    postgres: PostgreSQL 16-alpine, port 5432
+    redis: Redis 7-alpine, port 6379
+    server: Express API, port 4000, networks: [equiyield-network, net]
+    web: Next.js, port 3000, networks: [equiyield-network, net]
+  networks:
+    net: external (NPM network)
+  ```
+
+- **Environment Variables (.env):**
+  - Hex-generated passwords (64 characters, no special chars)
+  - `DEMO_MODE=true`
+  - `NEXT_PUBLIC_API_BASE_URL=https://equiyield.sanchez.ph`
+
+- **SSL Certificate:**
+  - Let's Encrypt via NPM
+  - Valid until April 9, 2026
+  - Force SSL enabled
+
+**Demo Data Setup:**
+
+Created `seed-demo.ts` script with:
+- Admin user: `admin@equiyield.local` / `Admin@123456`
+- 5 demo members (all use `Member@123` password)
+- Sample contributions, loans, loan payments
+- Historical dividend payouts
+- System config with realistic values
+
+**Issues Fixed:**
+- TypeScript compilation errors from wrong Prisma field names
+- Import paths correcting (moved seed-demo.ts from root to src/ folder)
+- Field mapping: `principal_amount` → `principal`, `loan_id` → `loanId`, `shareCount` → `sharesCount`
+- Added missing loan fields: `borrowerType`, `borrowerName`, `borrowerEmail`, `borrowerPhone`
+
+**Final Status:**
+- ✓ Application deployed and accessible at https://equiyield.sanchez.ph
+- ✓ SSL certificate installed and verified
+- ✓ Admin dashboard functional
+- ✓ API endpoints responding correctly
+- ✓ Database migrations applied successfully
+- ✓ Docker build optimized and stable
+- ✓ Demo data ready for population
+- ✓ Documentation updated with production deployment guide
+
+---
+
+**Generated:** January 10, 2026  
+**Status:** v1.0.0 Production Deployed  
+**Deployment:** https://equiyield.sanchez.ph  
+**Next Action:** Populate demo data, user acceptance testing
+

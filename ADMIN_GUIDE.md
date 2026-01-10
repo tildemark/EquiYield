@@ -153,23 +153,74 @@ ON CONFLICT (year) DO UPDATE SET amount = 50000, "updatedAt" = NOW();
 - All sensitive operations require `x-admin-token` header
 - In production, use secure secret management
 - Implement proper authentication beyond admin token
+- Change default admin password immediately after first login
+- Use hex-generated passwords to avoid URL encoding issues: `openssl rand -hex 32`
+
+## Production Deployment
+
+**Docker Configuration:**
+- Uses `docker-compose.prod.yml` for production environment
+- Optimized single-stage Dockerfiles (node:18 standard)
+- PostgreSQL 16 + Redis 7 in containers
+- Nginx Proxy Manager for SSL and reverse proxy
+
+**Environment Variables Required:**
+```env
+DATABASE_URL=postgresql://equiyield:PASSWORD@postgres:5432/equiyield
+REDIS_URL=redis://:PASSWORD@redis:6379
+JWT_SECRET=your-secret-key
+ADMIN_TOKEN=your-admin-token
+DEMO_MODE=true
+NEXT_PUBLIC_API_BASE_URL=https://yourdomain.com
+```
+
+**Network Configuration:**
+- Both server and web containers must be on NPM's external network
+- Expose ports 4000 (API) and 3000 (web)
+- Configure NPM with custom location `/api` → `equiyield-server:4000`
+
+**Demo Data:**
+Run seed script after first deployment:
+```bash
+docker exec equiyield-server node dist/seed-demo.js
+```
+
+Creates:
+- Admin: `admin@equiyield.local` / `Admin@123456`
+- 5 demo members (password: `Member@123`)
+- Sample contributions, loans, and dividends
 
 ## Troubleshooting
 
 **Can't connect to database:**
 ```bash
-docker-compose ps  # Check if containers are running
-docker-compose up -d  # Start if stopped
+docker compose -f docker-compose.prod.yml ps  # Check if containers are running
+docker compose -f docker-compose.prod.yml up -d  # Start if stopped
 ```
+
+**Docker build fails with Prisma errors:**
+- Ensure using `node:18` (not Alpine) for ARM64 compatibility
+- Check DATABASE_URL doesn't have special characters in password
+- Regenerate passwords with: `openssl rand -hex 32`
+
+**HTTP 525 SSL errors:**
+- Verify containers are on NPM's external network
+- Check ports are exposed in docker-compose.prod.yml
+- Restart NPM proxy host to refresh DNS cache
 
 **Need to reset database:**
 ```bash
-docker-compose down -v  # Remove volumes
-docker-compose up -d
+docker compose -f docker-compose.prod.yml down -v  # Remove volumes
+docker compose -f docker-compose.prod.yml up -d
 cd apps/server
-npx prisma migrate dev --name init
+npx prisma migrate deploy  # Production migrations
 ```
 
 **Cache not updating:**
 - Redis cache keys automatically invalidate on data changes
-- Manual clear: `docker-compose restart redis`
+- Manual clear: `docker compose restart redis`
+
+**TypeScript compilation errors:**
+- Check Prisma field names match schema exactly
+- Run `npx prisma generate` after schema changes
+- Verify imports use correct relative paths
