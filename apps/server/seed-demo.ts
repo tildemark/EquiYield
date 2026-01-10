@@ -1,5 +1,5 @@
-import { prisma } from './src/prisma.js';
-import { hashPassword } from './src/services/auth.js';
+import { prisma } from './prisma.js';
+import { hashPassword } from './services/auth.js';
 
 async function seedDemoData() {
   console.log('🌱 Seeding demo data...\n');
