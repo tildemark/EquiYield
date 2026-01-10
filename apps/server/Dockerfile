@@ -6,7 +6,7 @@ WORKDIR /app
 COPY apps/server/package*.json ./
 RUN npm install
 
-# Copy server source
+# Copy server source including seed script
 COPY apps/server/ ./
 
 # Generate Prisma and build
