@@ -239,24 +239,26 @@ MIT License - See LICENSE file for details
 	- Total amount summary for each year
 	- All payouts sortable by date, member, amount, and reference for easy reconciliation with bank/GCash statements
 
-## Bulk Import
+## 📜 License & Licensing
 
-- Download template from `/api/admin/users/import/template` (or via Admin UI → Members → Advanced Actions)
-- Upload filled Excel to `/api/admin/users/import`
-- Response includes created accounts and plaintext passwords (distribute securely)
+**EquiYield** is provided free of charge under the **EquiYield Free Software License** for personal, educational, and non-commercial use.
 
-## Annual Archive / Purge
+### Free Use (Always)
+- ✅ Internal organizational use (non-commercial)
+- ✅ Evaluating and testing the Software
+- ✅ Educational and learning purposes
+- ✅ Contributing to the open-source project
 
-Trigger via Admin UI or `POST /api/admin/archive-run` with:
+### Commercial Use (Requires License Agreement)
+- ❌ Professional implementation or consulting services
+- ❌ Software modifications or custom features
+- ❌ Use as part of commercial products or SaaS offerings
+- ❌ Re-distribution or white-label versions
 
-```
-{
-	"year": 2026,
-	"purgeContributionsBeforeYear": 2023,
-	"purgeLoansBeforeYear": 2023,
-	"archiveMembers": true,
-	"note": "New term reset"
-}
-```
+**For Commercial License inquiries or custom arrangements:**  
+📧 Email: [your-email@sanchez.ph]  
+🌐 Website: https://sanchez.ph
 
-Creates an `ArchiveRun` audit record and reports counts for purged/archived items.
+See [LICENSE](./LICENSE) and [COMMERCIAL_LICENSE.md](./COMMERCIAL_LICENSE.md) for complete details.
+
+---
