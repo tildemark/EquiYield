@@ -78,7 +78,7 @@ Commercial licensing is **customized** based on:
 ## How to Obtain a Commercial License
 
 ### Contact Information
-📧 **Email:** [your-email@sanchez.ph]  
+📧 **Email:** [derf@sanchez.ph]  
 🌐 **Website:** https://sanchez.ph  
 📱 **Response Time:** 2-3 business days
 
