@@ -256,7 +256,7 @@ MIT License - See LICENSE file for details
 - ❌ Re-distribution or white-label versions
 
 **For Commercial License inquiries or custom arrangements:**  
-📧 Email: [your-email@sanchez.ph]  
+📧 Email: [derf@sanchez.ph]  
 🌐 Website: https://sanchez.ph
 
 See [LICENSE](./LICENSE) and [COMMERCIAL_LICENSE.md](./COMMERCIAL_LICENSE.md) for complete details.
